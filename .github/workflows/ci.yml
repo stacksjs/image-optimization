@@ -20,10 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.2
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-
       - name: Setup Pantry
+        # The action installs bun via deps.yaml and adds it to PATH, so
+        # there's no separate `oven-sh/setup-bun` step needed.
         uses: home-lang/pantry/packages/action@main
 
       - name: Use cached node_modules
@@ -48,9 +47,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
 
       - name: Setup Pantry
         uses: home-lang/pantry/packages/action@main

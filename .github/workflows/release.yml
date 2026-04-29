@@ -19,10 +19,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-
       - name: Setup Pantry
+        # Installs bun via deps.yaml and puts it on PATH for following steps.
         uses: home-lang/pantry/packages/action@main
 
       - name: Install Dependencies
