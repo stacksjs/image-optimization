@@ -28,17 +28,17 @@
     "dev:native": "stx . --native",
     "build": "stx build",
     "start": "stx start",
-    "publish:patch": "bunx --bun bumpx patch --yes",
-    "publish:minor": "bunx --bun bumpx minor --yes",
-    "publish:major": "bunx --bun bumpx major --yes"
+    "release:patch": "bunx --bun bumpx patch --yes",
+    "release:minor": "bunx --bun bumpx minor --yes",
+    "release:major": "bunx --bun bumpx major --yes"
   },
   "dependencies": {
     "@stacksjs/stx": "^0.2.21",
+    "@stacksjs/ts-png": "^0.1.2",
     "ts-avif": "link:ts-avif",
     "ts-bmp": "link:ts-bmp",
-    "ts-gif": "link:ts-gif",
-    "ts-jpeg": "link:ts-jpeg",
-    "ts-png": "link:ts-png",
+    "ts-gif": "^0.1.2",
+    "ts-jpeg": "^0.3.1",
     "ts-webp": "link:ts-webp"
   }
 }

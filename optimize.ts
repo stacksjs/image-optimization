@@ -9,7 +9,7 @@
 
 import { Buffer } from 'node:buffer'
 
-import png from 'ts-png'
+import png from '@stacksjs/ts-png'
 import * as jpeg from 'ts-jpeg'
 import * as webp from 'ts-webp'
 import * as bmp from 'ts-bmp'
