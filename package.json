@@ -2,13 +2,35 @@
   "name": "image-optimization",
   "type": "module",
   "version": "0.0.1",
-  "private": true,
-  "description": "ImageOptim-style native app built with stx + Bun, using pure-TS image libraries",
+  "description": "ImageOptimization — native-style image optimization app built with stx + Bun, using pure-TS image libraries",
+  "author": "Chris Breuer <chris@stacksjs.org>",
+  "license": "MIT",
+  "keywords": [
+    "image",
+    "optimization",
+    "imageoptim",
+    "stx",
+    "bun",
+    "desktop"
+  ],
+  "files": [
+    "pages",
+    "components",
+    "optimize.ts",
+    "stx.config.ts",
+    "crosswind.config.ts",
+    "deps.yaml",
+    "README.md"
+  ],
   "scripts": {
+    "setup": "pantry install && bun install",
     "dev": "stx .",
     "dev:native": "stx . --native",
-    "build": "stx build .",
-    "start": "stx start"
+    "build": "stx build",
+    "start": "stx start",
+    "publish:patch": "bunx --bun bumpx patch --yes",
+    "publish:minor": "bunx --bun bumpx minor --yes",
+    "publish:major": "bunx --bun bumpx major --yes"
   },
   "dependencies": {
     "@stacksjs/stx": "^0.2.21",

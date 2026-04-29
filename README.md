@@ -23,9 +23,25 @@ pure-TypeScript image libraries (`ts-png`, `ts-jpeg`, `ts-webp`, `ts-bmp`,
 ## Run it
 
 ```bash
+bun run setup        # provision system + JS deps (pantry install + bun install)
 bun run dev          # browser
 bun run dev:native   # native Craft window (macOS)
 ```
+
+Bun is the only system requirement — declared in `deps.yaml` and provisioned
+by [pantry](https://github.com/home-lang/pantry) when you run `pantry install`
+(or `bun run setup`). Everything else is a regular `package.json` dependency.
+
+## Publishing
+
+```bash
+bun run publish:patch   # 0.0.1 → 0.0.2 → pantry publish
+bun run publish:minor   # 0.0.x → 0.1.0 → pantry publish
+```
+
+Releases are uploaded to the pantry registry at `registry.pantry.dev`.
+Auth: AWS creds (preferred, direct S3) or `PANTRY_REGISTRY_TOKEN`
+(HTTP upload).
 
 The `--native` flag relies on:
 

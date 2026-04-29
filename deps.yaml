@@ -1,0 +1,12 @@
+# System dependencies for image-optimization.
+#
+# `pantry install` reads this file alongside package.json and provisions any
+# system binaries listed here before installing JS deps. Bun is the only
+# system requirement — every other dependency (stx, ts-jpeg, ts-png, …) is a
+# regular package.json entry resolved by Bun's installer.
+#
+# This is also inferable from `package.json` (the scripts shell out to `stx`,
+# which is a Bun-native binary) — but declaring it explicitly makes the
+# requirement obvious and keeps `pantry install` deterministic.
+dependencies:
+  bun.sh: '*'

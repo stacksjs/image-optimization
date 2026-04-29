@@ -1,4 +1,5 @@
 node_modules/
+pantry/
 .stx/
 dist/
 .DS_Store
