@@ -12,10 +12,10 @@
   },
   "dependencies": {
     "@stacksjs/stx": "^0.2.21",
-    "jpgx": "link:jpgx",
     "ts-avif": "link:ts-avif",
     "ts-bmp": "link:ts-bmp",
     "ts-gif": "link:ts-gif",
+    "ts-jpeg": "link:ts-jpeg",
     "ts-png": "link:ts-png",
     "ts-webp": "link:ts-webp"
   }
