@@ -1,0 +1,22 @@
+{
+  "name": "image-optimization",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "description": "ImageOptim-style native app built with stx + Bun, using pure-TS image libraries",
+  "scripts": {
+    "dev": "stx .",
+    "dev:native": "stx . --native",
+    "build": "stx build .",
+    "start": "stx start"
+  },
+  "dependencies": {
+    "@stacksjs/stx": "^0.2.21",
+    "jpgx": "link:jpgx",
+    "ts-avif": "link:ts-avif",
+    "ts-bmp": "link:ts-bmp",
+    "ts-gif": "link:ts-gif",
+    "ts-png": "link:ts-png",
+    "ts-webp": "link:ts-webp"
+  }
+}
