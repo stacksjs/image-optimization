@@ -13,15 +13,6 @@
     "bun",
     "desktop"
   ],
-  "files": [
-    "pages",
-    "components",
-    "optimize.ts",
-    "stx.config.ts",
-    "crosswind.config.ts",
-    "deps.yaml",
-    "README.md"
-  ],
   "scripts": {
     "setup": "pantry install && bun install",
     "dev": "stx .",
@@ -34,11 +25,11 @@
   },
   "dependencies": {
     "@stacksjs/stx": "^0.2.21",
+    "@stacksjs/ts-avif": "^0.1.0",
+    "@stacksjs/ts-bmp": "^0.1.0",
     "@stacksjs/ts-png": "^0.1.2",
-    "ts-avif": "link:ts-avif",
-    "ts-bmp": "link:ts-bmp",
+    "@stacksjs/ts-webp": "^0.1.0",
     "ts-gif": "^0.1.2",
-    "ts-jpeg": "^0.3.1",
-    "ts-webp": "link:ts-webp"
+    "ts-jpeg": "^0.3.1"
   }
 }

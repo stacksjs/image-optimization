@@ -8,7 +8,7 @@
  *   bun run dev:native   # native Craft window
  */
 
-import type { StxConfig } from '../../Tools/stx/packages/stx/src/types'
+import type { StxConfig } from '@stacksjs/stx'
 import { optimize } from './optimize'
 
 /** Hard cap so a runaway upload can't OOM the dev server. */
