@@ -1,12 +1,14 @@
 # System dependencies for image-optimization.
 #
 # `pantry install` reads this file alongside package.json and provisions any
-# system binaries listed here before installing JS deps. Bun is the only
-# system requirement — every other dependency (stx, ts-jpeg, ts-png, …) is a
-# regular package.json entry resolved by Bun's installer.
-#
-# This is also inferable from `package.json` (the scripts shell out to `stx`,
-# which is a Bun-native binary) — but declaring it explicitly makes the
-# requirement obvious and keeps `pantry install` deterministic.
+# system binaries listed here before installing JS deps. Every other dep
+# (stx, ts-jpeg, ts-png, …) is a regular package.json entry resolved by
+# Bun's installer.
 dependencies:
+  # JS runtime — used by every script in package.json
   bun.sh: ^1.3.13
+
+  # Native shell binary used by `bun run dev:native` (locally) and by the
+  # `.dmg` packaging step in release.yml — `@craft-native/craft`'s
+  # packageApp() needs the `craft` binary on PATH to bundle into the .app.
+  craft-native.org: ^0.0.5

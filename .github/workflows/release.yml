@@ -8,7 +8,9 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # macOS runner is required: the DMG packaging step calls `hdiutil` and
+    # creates a real .app bundle. Apple Silicon is the canonical target.
+    runs-on: macos-15
     permissions:
       contents: write
       id-token: write
@@ -20,14 +22,29 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Pantry
-        # Installs bun via deps.yaml and puts it on PATH for following steps.
+        # Provisions everything in deps.yaml: bun (the runtime) and
+        # craft-native.org (the native shell binary that gets bundled into
+        # the .app). Pantry adds them to PATH for subsequent steps.
         uses: home-lang/pantry/packages/action@main
 
       - name: Install Dependencies
         run: bun install
 
-      - name: Build
+      - name: Build site
         run: bun run build
+
+      - name: Build .dmg
+        # scripts/package.ts calls @craft-native/craft's packageApp(),
+        # which produces a `.app` bundle and then a `.dmg` via `hdiutil`
+        # under ./dist/. Code-signing + notarization are wired up via
+        # the env block below — when the secrets are absent the DMG is
+        # produced unsigned (still installable, but Gatekeeper will
+        # quarantine it on first download).
+        run: bun scripts/package.ts
+        env:
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
 
       - name: Publish to Pantry registry
         # image-optimization is an stx app, not an npm library — we publish
@@ -40,5 +57,11 @@ jobs:
 
       - name: Create GitHub Release
         uses: stacksjs/action-releaser@v1.2.9
+        with:
+          # Pick up every .dmg the packaging step wrote — typically a single
+          # ImageOptimization-<version>.dmg. Globbing keeps the workflow
+          # working when we add .pkg or per-arch builds later.
+          files: |
+            dist/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

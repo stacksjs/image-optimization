@@ -13,9 +13,14 @@
         "ts-gif": "^0.1.2",
         "ts-jpeg": "^0.3.1",
       },
+      "devDependencies": {
+        "@craft-native/craft": "^0.0.23",
+      },
     },
   },
   "packages": {
+    "@craft-native/craft": ["@craft-native/craft@0.0.23", "", { "dependencies": { "archiver": "^7.0.1" }, "bin": { "craft-sdk": "./bin/cli.ts" } }, "sha512-P1pEp6YN3Qc+Uz+OqqirX6zypZ1y0977uvLsF7xjp9JLOHvMyORgSQnk3l+LF6rCIhkM0b0zXA+72hW63a0RiA=="],
+
     "@cwcss/crosswind": ["@cwcss/crosswind@0.2.0", "", { "dependencies": { "@stacksjs/clapp": "^0.2.0", "bunfig": "^0.15.0" }, "bin": { "crosswind": "./dist/cli.js" } }, "sha512-TJ0LPmiZIy3KWc/Tf9yyNUbQBZv7O24xYGcOPRV+3lbDA4kBiebG9Coj1cjTa2YRFMKCDbtW8sJ7bJEcbC4SvQ=="],
 
     "@isaacs/cliui": ["@isaacs/cliui@8.0.2", "", { "dependencies": { "string-width": "^5.1.2", "string-width-cjs": "npm:string-width@^4.2.0", "strip-ansi": "^7.0.1", "strip-ansi-cjs": "npm:strip-ansi@^6.0.1", "wrap-ansi": "^8.1.0", "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0" } }, "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA=="],

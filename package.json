@@ -18,6 +18,7 @@
     "dev": "stx .",
     "dev:native": "stx . --native",
     "build": "stx build",
+    "build:dmg": "bun run build && bun scripts/package.ts",
     "start": "stx start",
     "release:patch": "bunx --bun bumpx patch --yes",
     "release:minor": "bunx --bun bumpx minor --yes",
@@ -31,5 +32,8 @@
     "@stacksjs/ts-webp": "^0.1.0",
     "ts-gif": "^0.1.2",
     "ts-jpeg": "^0.3.1"
+  },
+  "devDependencies": {
+    "@craft-native/craft": "^0.0.23"
   }
 }
