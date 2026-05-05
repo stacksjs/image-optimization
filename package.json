@@ -15,9 +15,9 @@
   ],
   "scripts": {
     "setup": "pantry install && bun install",
-    "dev": "stx . --pages src/pages",
-    "dev:native": "stx . --native --pages src/pages",
-    "build": "stx build --pages src/pages",
+    "dev": "stx .",
+    "dev:native": "stx . --native",
+    "build": "bun scripts/build.ts",
     "build:dmg": "bun run build && bun scripts/package.ts",
     "start": "stx start",
     "release:patch": "bunx --bun bumpx patch --yes",
