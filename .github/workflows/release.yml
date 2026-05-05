@@ -8,9 +8,37 @@ on:
 
 jobs:
   release:
-    # macOS runner is required: the DMG packaging step calls `hdiutil` and
-    # creates a real .app bundle. Apple Silicon is the canonical target.
-    runs-on: macos-15
+    # Each runner builds + uploads its own platform's artifacts to the same
+    # GitHub Release. action-releaser creates the release on first hit and
+    # appends assets on subsequent hits, so the three jobs cooperate.
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon — produces ImageOptimization-<version>.dmg via hdiutil.
+          # This runner also publishes to the pantry registry (single source of
+          # truth — the other runners just upload installers).
+          - os: macos-15
+            artifacts: |
+              dist/*.dmg
+            publish_pantry: true
+          # Windows — packageApp() emits an .msi (WiX-ish) + a portable .zip.
+          - os: windows-latest
+            artifacts: |
+              dist/*.msi
+              dist/*-windows.zip
+            publish_pantry: false
+          # Linux — packageApp() emits a .deb (libgtk-3-0 + libwebkit2gtk-4.1-37
+          # are declared in the deb's Depends:) and an .AppImage for distros
+          # that aren't dpkg-based.
+          - os: ubuntu-latest
+            artifacts: |
+              dist/*.deb
+              dist/*.AppImage
+            publish_pantry: false
+
     permissions:
       contents: write
       id-token: write
@@ -24,7 +52,8 @@ jobs:
       - name: Setup Pantry
         # Provisions everything in deps.yaml: bun (the runtime) and
         # craft-native.org (the native shell binary that gets bundled into
-        # the .app). Pantry adds them to PATH for subsequent steps.
+        # the platform's installer). Pantry adds them to PATH for subsequent
+        # steps on every supported runner OS.
         uses: home-lang/pantry/packages/action@main
 
       - name: Install Dependencies
@@ -33,13 +62,11 @@ jobs:
       - name: Build site
         run: bun run build
 
-      - name: Build .dmg
-        # scripts/package.ts calls @craft-native/craft's packageApp(),
-        # which produces a `.app` bundle and then a `.dmg` via `hdiutil`
-        # under ./dist/. Code-signing + notarization are wired up via
-        # the env block below — when the secrets are absent the DMG is
-        # produced unsigned (still installable, but Gatekeeper will
-        # quarantine it on first download).
+      - name: Package
+        # scripts/package.ts inspects process.platform and asks
+        # @craft-native/craft to build only the host's installer(s) into ./dist.
+        # macOS code-signing + notarization are wired via the env block — the
+        # other platforms ignore those secrets.
         run: bun scripts/package.ts
         env:
           APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
@@ -48,20 +75,20 @@ jobs:
 
       - name: Publish to Pantry registry
         # image-optimization is an stx app, not an npm library — we publish
-        # only to the pantry registry. The HTTP-token path keeps secrets
-        # out of the runner; the registry server validates and writes
-        # through to S3 + DynamoDB.
+        # only to the pantry registry, and only once per release (from the
+        # macOS runner). The HTTP-token path keeps secrets out of the runner;
+        # the registry server validates and writes through to S3 + DynamoDB.
+        if: matrix.publish_pantry
         run: pantry publish --access public --tag latest
         env:
           PANTRY_REGISTRY_TOKEN: ${{ secrets.PANTRY_TOKEN }}
 
-      - name: Create GitHub Release
+      - name: Create / update GitHub Release
+        # Each matrix leg uploads its own platform's artifacts. action-releaser
+        # is idempotent: the first runner to finish creates the release, the
+        # others append their installers as additional assets.
         uses: stacksjs/action-releaser@v1.2.9
         with:
-          # Pick up every .dmg the packaging step wrote — typically a single
-          # ImageOptimization-<version>.dmg. Globbing keeps the workflow
-          # working when we add .pkg or per-arch builds later.
-          files: |
-            dist/*.dmg
+          files: ${{ matrix.artifacts }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
