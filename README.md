@@ -97,7 +97,7 @@ Continuous-release tarballs are also published to the pantry registry at `regist
                  ▼
 ┌──────────────────────────────────────┐
 │  stx dev server (Bun.serve)          │  ← server
-│   ├ /         → pages/index.stx      │
+│   ├ /         → src/pages/index.stx  │
 │   └ /optimize → apiRoutes (config)   │
 └────────────────┬─────────────────────┘
                  │ dispatch by magic bytes
@@ -138,17 +138,19 @@ Output is only kept when smaller than the input — already-optimized files come
 
 ```
 image-optimization/
-├── pages/
-│   └── index.stx           — the ImageOptim UI (drop zone, list, toolbar)
-├── components/
-│   ├── DropZone.stx        — full-window drop target
-│   ├── Toolbar.stx         — bottom action bar
-│   └── FileRow.stx         — per-file row template
-├── optimize.ts             — magic-byte format detection → per-format pipeline
+├── src/
+│   ├── pages/
+│   │   └── index.stx       — the ImageOptim UI (drop zone, list, toolbar)
+│   ├── components/
+│   │   ├── DropZone.stx    — full-window drop target
+│   │   ├── Toolbar.stx     — bottom action bar
+│   │   └── FileRow.stx     — per-file row template
+│   └── optimize.ts         — magic-byte format detection → per-format pipeline
 ├── scripts/
 │   └── package.ts          — builds .app + .dmg via @craft-native/craft
-├── stx.config.ts           — registers /optimize via apiRoutes
-├── crosswind.config.ts     — content paths for utility-class generation
+├── .config/
+│   ├── stx.ts              — registers /optimize via apiRoutes
+│   └── crosswind.ts        — content paths for utility-class generation
 ├── deps.yaml               — pantry-provisioned system deps (bun, craft)
 └── package.json
 ```

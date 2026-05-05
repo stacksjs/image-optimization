@@ -10,7 +10,7 @@ import { resolve } from 'node:path'
 
 export default {
   content: [
-    resolve(import.meta.dir, 'pages/**/*.stx'),
-    resolve(import.meta.dir, 'components/**/*.stx'),
+    resolve(import.meta.dir, '../src/pages/**/*.stx'),
+    resolve(import.meta.dir, '../src/components/**/*.stx'),
   ],
 }

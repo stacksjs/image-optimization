@@ -9,18 +9,18 @@
  */
 
 import type { StxConfig } from '@stacksjs/stx'
-import { optimize } from './optimize'
+import { optimize } from '../src/optimize'
 
 /** Hard cap so a runaway upload can't OOM the dev server. */
 const MAX_UPLOAD_BYTES = 256 * 1024 * 1024 // 256 MB
 
 const config: Partial<StxConfig> = {
-  pagesDir: 'pages',
-  componentsDir: 'components',
+  pagesDir: 'src/pages',
+  componentsDir: 'src/components',
   // `@include('DropZone')` resolves against partialsDir (default: 'partials/').
-  // Point it at components/ so we don't need a separate directory just for
+  // Point it at src/components/ so we don't need a separate directory just for
   // the small bits of chrome the page composes.
-  partialsDir: 'components',
+  partialsDir: 'src/components',
   cache: false,
   debug: false,
   app: {
