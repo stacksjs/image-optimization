@@ -1,22 +1,16 @@
 #!/usr/bin/env bun
 /**
- * Build the static site. Wraps `buildApp` so that `pagesDir` is sourced
- * from `.config/stx.ts` rather than a CLI flag — `stx build` (the CLI)
- * ignores the config's pagesDir and only looks at its own `--pages`
- * flag, which would force every package.json script to repeat the path.
+ * Build the static site.
  *
- * `stx .` (dev) already honors the config's pagesDir, so no wrapper is
- * needed there.
+ * Wraps buildApp() instead of `stx build` because the CLI hardcodes
+ * --pages=pages and forwards it to buildApp, overriding pagesDir from
+ * the loaded config. Calling buildApp() directly lets the bunfig-loaded
+ * .config/stx.ts (pagesDir, publicDir, etc.) drive the build.
  */
 
 import { buildApp } from '@stacksjs/stx'
-import stxConfig from '../.config/stx'
 
-const result = await buildApp({
-  ssg: {
-    pagesDir: stxConfig.pagesDir,
-  },
-})
+const result = await buildApp()
 
 if (result.ssg && result.ssg.failedCount > 0)
   process.exit(1)
