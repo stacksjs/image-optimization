@@ -11,10 +11,10 @@ import { Buffer } from 'node:buffer'
 
 import png from '@stacksjs/ts-png'
 import * as jpeg from 'ts-jpeg'
-import * as webp from 'ts-webp'
-import * as bmp from 'ts-bmp'
+import * as webp from '@stacksjs/ts-webp'
+import * as bmp from '@stacksjs/ts-bmp'
 import * as gif from 'ts-gif'
-import * as avif from 'ts-avif'
+import * as avif from '@stacksjs/ts-avif'
 
 export type ImageFormat =
   | 'png' | 'jpeg' | 'webp' | 'avif' | 'gif' | 'bmp' | 'svg'
