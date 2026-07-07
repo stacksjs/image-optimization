@@ -25,7 +25,7 @@
     "release:major": "bunx --bun bumpx major --yes"
   },
   "dependencies": {
-    "@stacksjs/stx": "^0.2.21",
+    "@stacksjs/stx": "^0.2.82",
     "@stacksjs/ts-avif": "^0.1.0",
     "@stacksjs/ts-bmp": "^0.1.0",
     "@stacksjs/ts-png": "^0.1.2",
