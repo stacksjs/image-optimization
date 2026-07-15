@@ -6,7 +6,7 @@
 # Bun's installer.
 dependencies:
   # JS runtime — used by every script in package.json
-  bun.sh: ^1.3.13
+  bun.sh: ^1.3.14
 
   # Native shell binary used by `bun run dev:native` (locally) and by the
   # `.dmg` packaging step in release.yml — `@craft-native/craft`'s
