@@ -20,9 +20,9 @@
     "build": "bun scripts/build.ts",
     "build:dmg": "bun run build && bun scripts/package.ts",
     "start": "stx start",
-    "release:patch": "bunx --bun bumpx patch --yes",
-    "release:minor": "bunx --bun bumpx minor --yes",
-    "release:major": "bunx --bun bumpx major --yes"
+    "release:patch": "bunx --bun @stacksjs/bumpx patch --yes",
+    "release:minor": "bunx --bun @stacksjs/bumpx minor --yes",
+    "release:major": "bunx --bun @stacksjs/bumpx major --yes"
   },
   "dependencies": {
     "@stacksjs/stx": "^0.2.82",
