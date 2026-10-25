@@ -34,8 +34,8 @@
     "screenshot": "bun scripts/screenshot.ts"
   },
   "dependencies": {
-    "@stacksjs/desktop": "^0.2.698",
-    "@stacksjs/stx": "^0.2.698",
+    "@stacksjs/desktop": "^0.2.699",
+    "@stacksjs/stx": "^0.2.699",
     "@stacksjs/ts-avif": "^0.1.6",
     "@stacksjs/ts-bmp": "^0.1.1",
     "@stacksjs/ts-png": "^0.1.10",
@@ -46,7 +46,7 @@
     "ts-jpeg": "^0.3.6"
   },
   "devDependencies": {
-    "@stacksjs/buddy": "^0.75.311",
+    "@stacksjs/buddy": "^0.75.315",
     "better-dx": "^0.2.38",
     "ts-pantry": "^0.11.130"
   },

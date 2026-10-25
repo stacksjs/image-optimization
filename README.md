@@ -31,6 +31,8 @@ bun run build:dmg           # create a local DMG
 
 `buddy new . --native --adopt` integrates this repository with Stacks. The app configuration is in `craft.config.ts`; no database, web server deployment or framework vendor tree is required. Craft is resolved from PATH through Pantry. Framework contributors can set `CRAFT_BIN` to a compiled Craft executable.
 
+`bun run dev:browser` previews the interface. Image selection and saving require the native macOS app; an unavailable native capability produces a visible error.
+
 The installed app contains one compiled Bun backend and Craft’s official webview runtime profile. That profile keeps the native window, bridge and backend host while omitting Craft’s separate headless scripting engine. It needs no installed Bun, external codecs, network service or development checkout. Most of the bundle is its single embedded processing runtime. CI enforces a 100,000 KiB bundle budget.
 
 Application code is TypeScript and STX. Native platform implementations belong in Craft and shared STX APIs; the application contains no Swift or Kotlin.

@@ -46,14 +46,13 @@
     @media(prefers-color-scheme:dark) { :root { background:#181a21; color:#e6e9f3; --panel:#20232c; --line:#313541; --muted:#9da5b8; } .drop { border-color:#414965; } }
   </style>
 </head>
-<body @dragover.prevent @drop.prevent="drop($event)">
+<body @dragover.prevent @drop.prevent="drop()">
   <header>
     <div class="app-icon" aria-hidden="true"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3"/><path d="m4 17 5-5 4 4 3-3 4 4"/></svg></div>
     <div><h1>ImageOptimization</h1><p class="muted">Less weight. Same image.</p></div>
     <button class="add primary" @click="choose()">＋ Add images</button>
   </header>
   <main>
-    <input type="file" multiple accept="image/*,.svg" ref="picker" hidden @change="upload($event)">
     <div :hidden="files().length > 0">
       <button class="drop" @click="choose()">
         <svg class="drop-icon" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -69,10 +68,10 @@
         <tbody>
           <template :for="item in files()" :key="item.id">
             <tr :title="item.outputPath || item.note || ''">
-              <td><div class="file-name">{{ item.name }}</div><div class="file-note">{{ item.status === 'pending' ? 'Optimizing…' : item.status === 'error' ? item.note : item.wrote ? 'Copy saved · original preserved' : item.saved ? 'Ready to save' : item.note || 'Already optimized' }}</div></td>
+              <td><div class="file-name">{{ item.name }}</div><div class="file-note">{{ item.status === 'pending' ? 'Optimizing…' : item.status === 'error' ? item.note : item.wrote ? 'Copy saved · original preserved' : item.note || 'Already optimized' }}</div></td>
               <td>{{ size(item.inputSize) }}</td><td>{{ item.status === 'done' ? size(item.outputSize) : '—' }}</td>
               <td :class="item.status === 'error' ? 'failed' : item.saved > 0 ? 'saving' : 'neutral'">{{ item.status === 'done' ? item.savedPct.toFixed(1) + '%' : item.status === 'error' ? 'Failed' : '…' }}</td>
-              <td><button class="row-action" :hidden="!item.bytes" @click="download(item)">Save</button> <button class="row-action" :disabled="item.status === 'pending'" @click="remove(item.id)" aria-label="Remove image">×</button></td>
+              <td><button class="row-action" :disabled="item.status === 'pending'" @click="remove(item.id)" aria-label="Remove image">×</button></td>
             </tr>
           </template>
         </tbody>
@@ -83,17 +82,15 @@
   </main>
   <footer>
     <div class="summary"><strong aria-live="polite">{{ summary() }}</strong><span class="privacy">On your Mac. No uploads. Originals preserved.</span></div>
-    <button class="destination" :hidden="!native()" :disabled="busy()" :title="outputDirectory() || 'Choose where optimized copies are saved'" @click="chooseOutputFolder()">{{ outputDirectory() ? outputDirectory().split('/').pop() + ' ▾' : 'Output folder…' }}</button>
+    <button class="destination" :disabled="busy()" :title="outputDirectory() || 'Choose where optimized copies are saved'" @click="chooseOutputFolder()">{{ outputDirectory() ? outputDirectory().split('/').pop() + ' ▾' : 'Output folder…' }}</button>
     <button @click="clear()" :disabled="busy() || files().length === 0">Clear</button>
   </footer>
   <script client>
     import { app, showOpenDialog, isAvailable } from '@stacksjs/desktop/browser'
 
-    const native = state(isAvailable('dialog'))
     const outputDirectory = state('')
     const files = state([])
     const error = state('')
-    const picker = useRef('picker')
     const busy = derived(() => files().some(item => item.status === 'pending'))
     const summary = derived(() => {
       const items = files()
@@ -104,6 +101,11 @@
     })
     let queue = Promise.resolve()
     let folderChoice = null
+
+    function requireNativeFiles() {
+      if (!isAvailable('dialog'))
+        throw new Error('Native file access is unavailable. Open the macOS app and try again.')
+    }
 
     function size(value) {
       if (!value) return '0 B'
@@ -118,43 +120,39 @@
       error.set('')
       for (const entry of entries) {
         if (entry.path && files().some(item => item.path === entry.path)) continue
-        const item = { id: crypto.randomUUID(), inputSize: 0, outputSize: 0, saved: 0, savedPct: 0, status: 'pending', ...entry, outputDirectory: entry.path ? outputDirectory() : '' }
+        const item = { id: crypto.randomUUID(), inputSize: 0, outputSize: 0, saved: 0, savedPct: 0, status: 'pending', ...entry, outputDirectory: outputDirectory() }
         files.set([...files(), item])
         queue = queue.then(() => run(item)).catch(err => error.set(err.message))
       }
     }
     async function run(item) {
       try {
-        const query = item.path ? `path=${encodeURIComponent(item.path)}${item.outputDirectory ? `&outputDirectory=${encodeURIComponent(item.outputDirectory)}` : ''}` : `name=${encodeURIComponent(item.name)}`
+        const query = `path=${encodeURIComponent(item.path)}${item.outputDirectory ? `&outputDirectory=${encodeURIComponent(item.outputDirectory)}` : ''}`
         const response = await fetch(`/optimize?${query}`, {
           method: 'POST',
           headers: { 'content-type': 'application/octet-stream' },
-          body: item.file ? await item.file.arrayBuffer() : undefined,
         })
         if (!response.ok) throw new Error(await response.text())
         const meta = JSON.parse(decodeURIComponent(response.headers.get('x-stx-result') || '%7B%7D'))
-        const bytes = item.path ? null : await response.arrayBuffer()
-        update(item.id, { ...meta, bytes, file: null, status: 'done' })
+        update(item.id, { ...meta, status: 'done' })
       }
       catch (err) {
-        update(item.id, { status: 'error', file: null, note: err.message })
+        update(item.id, { status: 'error', note: err.message })
         error.set(`${item.name}: ${err.message}`)
       }
     }
     async function choose() {
       try {
-        if (isAvailable('dialog')) {
-          const chosen = await showOpenDialog({ title: 'Choose images to optimize', multiSelections: true, filters: [{ name: 'Images', extensions: ['png','jpg','jpeg','webp','gif','svg','bmp','avif'] }] })
-          if (!chosen.canceled) await paths(chosen.filePaths)
-        }
-        else picker()?.click()
+        requireNativeFiles()
+        const chosen = await showOpenDialog({ title: 'Choose images to optimize', multiSelections: true, filters: [{ name: 'Images', extensions: ['png','jpg','jpeg','webp','gif','svg','bmp','avif'] }] })
+        if (!chosen.canceled) await paths(chosen.filePaths)
       }
       catch (err) { error.set(`Could not open images: ${err.message}`) }
     }
     async function chooseOutputFolder() {
-      if (!native()) return false
       if (folderChoice) return await folderChoice
       folderChoice = (async () => {
+        requireNativeFiles()
         const chosen = await showOpenDialog({ title: 'Choose a folder for optimized copies', canChooseDirectories: true, canChooseFiles: false, canCreateDirectories: true, buttonLabel: 'Save copies here' })
         if (chosen.canceled || !chosen.filePaths.length) return false
         error.set('')
@@ -168,29 +166,20 @@
     async function paths(values) {
       try {
         if (!values.length) return
+        requireNativeFiles()
         const info = await app.getInfo()
+        if (!info.bundleId || typeof info.sandboxed !== 'boolean')
+          throw new Error('Native app metadata is unavailable. Reopen the macOS app and try again.')
         if (info.sandboxed && !outputDirectory() && !await chooseOutputFolder()) return
         enqueue(values.map(path => ({ path, name: path.split('/').pop() })))
       }
       catch (err) { error.set(`Could not open images: ${err.message}`) }
     }
-    function upload(event) {
-      enqueue(Array.from(event.target.files || []).map(file => ({ name: file.name, file, inputSize: file.size })))
-      event.target.value = ''
-    }
-    function drop(event) {
+    function drop() {
       // Craft consumes native drops itself and emits paths once. Ignoring the
       // WebView event prevents duplicate work regardless of event ordering.
-      if (isAvailable('dialog')) return
-      enqueue(Array.from(event.dataTransfer?.files || []).map(file => ({ name: file.name, file, inputSize: file.size })))
-    }
-    function download(item) {
-      const url = URL.createObjectURL(new Blob([item.bytes]))
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = item.name
-      anchor.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      try { requireNativeFiles() }
+      catch (err) { error.set(err.message) }
     }
     function remove(id) { files.set(files().filter(item => item.id !== id)) }
     function clear() { files.set([]); error.set('') }

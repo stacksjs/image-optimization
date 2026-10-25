@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { resolve, join } from 'node:path'
 import { packageApp } from 'craft-native'
+import { resolveCraftExecutablePath } from '@stacksjs/stx/desktop'
 import config from '../craft.config'
 import pkg from '../package.json'
 
@@ -13,8 +14,7 @@ const keyPath = process.env.APP_STORE_CONNECT_API_KEY_PATH
 const keyId = process.env.APP_STORE_CONNECT_API_KEY_ID
 const issuer = process.env.APP_STORE_CONNECT_API_ISSUER_ID
 const keychainProfile = process.env.APPLE_NOTARY_PROFILE
-const nativeRuntimePath = Bun.which(config.runtimeProfile === 'webview' ? 'craft-webview' : 'craft')
-if (!nativeRuntimePath) throw new Error('Install the configured Craft runtime with Pantry before packaging')
+const nativeRuntimePath = resolveCraftExecutablePath(undefined, config.runtimeProfile)
 if (store && (!identity || !process.env.APPLE_INSTALLER_IDENTITY || !process.env.APPLE_PROVISIONING_PROFILE || !process.env.BUILD_NUMBER))
   throw new Error('App Store packaging requires application and installer identities, a provisioning profile and BUILD_NUMBER')
 if (release && !store && (!identity || (!keychainProfile && !(keyPath && keyId && issuer))))
