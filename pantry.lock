@@ -1,10 +1,15 @@
 {
   "version": "1.0",
   "packages": {
-    "bun.sh@0.0.0": {
-      "name": "bun.sh",
-      "version": "0.0.0",
-      "resolved": "registry:bun.sh@0.0.0"
+    "craft-native.org@0.0.350.1": {
+      "name": "craft-native.org",
+      "version": "0.0.350.1",
+      "resolved": "registry:craft-native.org@0.0.350.1"
+    },
+    "bun.com@1.4.4": {
+      "name": "bun.com",
+      "version": "1.4.4",
+      "resolved": "registry:bun.com@1.4.4"
     }
   }
 }

@@ -1,9 +1,9 @@
 {
   "name": "image-optimization",
   "type": "module",
-  "version": "0.0.1",
-  "description": "ImageOptimization — native-style image optimization app built with stx + Bun, using pure-TS image libraries",
-  "author": "Chris Breuer <chris@stacksjs.org>",
+  "version": "0.1.0",
+  "description": "Private, lossless image optimization for macOS, built with Stacks, STX and Craft.",
+  "author": "Chris Breuer <chris@stacksjs.com>",
   "license": "MIT",
   "keywords": [
     "image",
@@ -14,26 +14,43 @@
     "desktop"
   ],
   "scripts": {
+    "dev": "./buddy dev",
+    "build": "./buddy build",
+    "package": "bun scripts/package.ts",
     "setup": "pantry install && bun install",
-    "dev": "stx .",
-    "dev:native": "stx . --native",
-    "build": "bun scripts/build.ts",
-    "build:dmg": "bun run build && bun scripts/package.ts",
-    "start": "stx start",
-    "release:patch": "bunx --bun @stacksjs/bumpx patch --yes",
-    "release:minor": "bunx --bun @stacksjs/bumpx minor --yes",
-    "release:major": "bunx --bun @stacksjs/bumpx major --yes"
+    "dev:native": "./buddy dev",
+    "build:dmg": "bun run build && bun run package",
+    "release:patch": "bunx --bun @stacksjs/bumpx patch --commit --tag --push --yes",
+    "release:minor": "bunx --bun @stacksjs/bumpx minor --commit --tag --push --yes",
+    "release:major": "bunx --bun @stacksjs/bumpx major --commit --tag --push --yes",
+    "dev:browser": "stx .",
+    "test": "bun test tests",
+    "test:e2e": "bun scripts/e2e.ts",
+    "upgrade": "./buddy upgrade",
+    "lint": "bunx --bun pickier .",
+    "typecheck": "tsc --noEmit",
+    "store:prepare": "bun scripts/publish-store.ts --prepare",
+    "store:publish": "bun scripts/publish-store.ts",
+    "screenshot": "bun scripts/screenshot.ts"
   },
   "dependencies": {
-    "@stacksjs/stx": "^0.2.82",
-    "@stacksjs/ts-avif": "^0.1.0",
-    "@stacksjs/ts-bmp": "^0.1.0",
-    "@stacksjs/ts-png": "^0.1.2",
-    "@stacksjs/ts-webp": "^0.1.0",
-    "ts-gif": "^0.1.2",
-    "ts-jpeg": "^0.3.1"
+    "@stacksjs/desktop": "^0.2.698",
+    "@stacksjs/stx": "^0.2.698",
+    "@stacksjs/ts-avif": "^0.1.6",
+    "@stacksjs/ts-bmp": "^0.1.1",
+    "@stacksjs/ts-png": "^0.1.10",
+    "@stacksjs/ts-svg": "^0.1.6",
+    "@stacksjs/ts-webp": "^0.1.7",
+    "craft-native": "^0.0.350",
+    "ts-gif": "^0.1.5",
+    "ts-jpeg": "^0.3.6"
   },
   "devDependencies": {
-    "@craft-native/craft": "^0.0.23"
+    "@stacksjs/buddy": "^0.75.311",
+    "better-dx": "^0.2.38",
+    "ts-pantry": "^0.11.130"
+  },
+  "stacks": {
+    "type": "native"
   }
 }

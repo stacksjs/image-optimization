@@ -1,94 +1,133 @@
-name: Releaser
-
+name: Release macOS
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
-
+concurrency:
+  group: release-macos
+  cancel-in-progress: false
+permissions:
+  contents: write
 jobs:
   release:
-    # Each runner builds + uploads its own platform's artifacts to the same
-    # GitHub Release. action-releaser creates the release on first hit and
-    # appends assets on subsequent hits, so the three jobs cooperate.
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Apple Silicon — produces ImageOptimization-<version>.dmg via hdiutil.
-          # This runner also publishes to the pantry registry (single source of
-          # truth — the other runners just upload installers).
-          - os: macos-15
-            artifacts: |
-              dist/*.dmg
-            publish_pantry: true
-          # Windows — packageApp() emits an .msi (WiX-ish) + a portable .zip.
-          - os: windows-latest
-            artifacts: |
-              dist/*.msi
-              dist/*-windows.zip
-            publish_pantry: false
-          # Linux — packageApp() emits a .deb (libgtk-3-0 + libwebkit2gtk-4.1-37
-          # are declared in the deb's Depends:) and an .AppImage for distros
-          # that aren't dpkg-based.
-          - os: ubuntu-latest
-            artifacts: |
-              dist/*.deb
-              dist/*.AppImage
-            publish_pantry: false
-
-    permissions:
-      contents: write
-      id-token: write
-
+    runs-on: macos-15
+    timeout-minutes: 55
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ vars.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_API_ISSUER_ID }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6
+      - uses: pantry-pm/pantry/packages/action@e632b04fb1a8093e7c940c1dbd8ae4fb9b09bf5d
         with:
-          fetch-depth: 0
-
-      - name: Setup Pantry
-        # Provisions everything in deps.yaml: bun (the runtime) and
-        # craft-native.org (the native shell binary that gets bundled into
-        # the platform's installer). Pantry adds them to PATH for subsequent
-        # steps on every supported runner OS.
-        uses: home-lang/pantry/packages/action@main
-
-      - name: Install Dependencies
-        run: bun install
-
-      - name: Build site
-        run: bun run build
-
-      - name: Package
-        # scripts/package.ts inspects process.platform and asks
-        # @craft-native/craft to build only the host's installer(s) into ./dist.
-        # macOS code-signing + notarization are wired via the env block — the
-        # other platforms ignore those secrets.
-        run: bun scripts/package.ts
+          version: '0.11.130'
+          install: 'false'
+          packages: bun.com@1.4.4 craft-native.org@0.0.350.1
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun test tests
+      - run: ./buddy build
+      - run: bun run test:e2e
+      - name: Check native payload, architecture and bundle budget
+        run: |
+          file dist/ImageOptimization.app/Contents/MacOS/ImageOptimization | grep 'Mach-O.*arm64'
+          file dist/ImageOptimization.app/Contents/MacOS/stx-backend | grep 'Mach-O.*arm64'
+          test -z "$(git ls-files '*.swift' '*.kt' '*.kts' '*.xcodeproj/*' '*.xcworkspace/*')"
+          test "$(du -sk dist/ImageOptimization.app | cut -f1)" -lt 100000
+      - name: Import signing identity into an ephemeral keychain
         env:
-          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-
-      - name: Publish to Pantry registry
-        # image-optimization is an stx app, not an npm library — we publish
-        # only to the pantry registry, and only once per release (from the
-        # macOS runner). The HTTP-token path keeps secrets out of the runner;
-        # the registry server validates and writes through to S3 + DynamoDB.
-        if: matrix.publish_pantry
-        run: pantry publish --access public --tag latest
+          CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/imageoptimization.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+          printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          rm "$RUNNER_TEMP/signing.p12"
+          printf '%s' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          echo "APP_STORE_CONNECT_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+      - name: Sign, notarize and staple the DMG
+        run: bun run package
         env:
-          PANTRY_REGISTRY_TOKEN: ${{ secrets.PANTRY_TOKEN }}
-
-      - name: Create / update GitHub Release
-        # Each matrix leg uploads its own platform's artifacts. action-releaser
-        # is idempotent: the first runner to finish creates the release, the
-        # others append their installers as additional assets.
-        uses: stacksjs/action-releaser@v1.2.9
-        with:
-          files: ${{ matrix.artifacts }}
+          RELEASE: '1'
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      - name: Verify distributable
+        run: |
+          codesign --verify --deep --strict --verbose=2 dist/direct/ImageOptimization.app
+          xcrun stapler validate dist/direct/*.dmg
+          (cd dist/direct && shasum -a 256 *.dmg) > dist/direct/SHA256SUMS.txt
+      - name: Publish verified installer
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(bun -p "require('./package.json').version")"
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/direct/*.dmg dist/direct/SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" dist/direct/*.dmg dist/direct/SHA256SUMS.txt --target "$GITHUB_SHA" --title "ImageOptimization $VERSION" --generate-notes
+          fi
+      - name: Prepare store metadata and screenshots
+        run: bun run store:prepare
+        env:
+          APPLE_REVIEW_CONTACT: ${{ secrets.APPLE_REVIEW_CONTACT }}
+      - name: Import Mac App Store signing assets
+        env:
+          APPLICATION_CERTIFICATE: ${{ secrets.APPLE_STORE_APPLICATION_CERTIFICATE_BASE64 }}
+          INSTALLER_CERTIFICATE: ${{ secrets.APPLE_STORE_INSTALLER_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_STORE_CERTIFICATE_PASSWORD }}
+          PROFILE: ${{ secrets.APPLE_STORE_PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/imageoptimization-store.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          printf '%s' "$APPLICATION_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/store-app.p12"
+          printf '%s' "$INSTALLER_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/store-installer.p12"
+          security import "$RUNNER_TEMP/store-app.p12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security import "$RUNNER_TEMP/store-installer.p12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          printf '%s' "$PROFILE" | base64 --decode > "$RUNNER_TEMP/store.provisionprofile"
+          chmod 600 "$RUNNER_TEMP/store.provisionprofile"
+          echo "APPLE_SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          echo "APPLE_PROVISIONING_PROFILE=$RUNNER_TEMP/store.provisionprofile" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          cp "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          echo "API_PRIVATE_KEYS_DIR=$RUNNER_TEMP/private_keys" >> "$GITHUB_ENV"
+      - name: Create and validate sandboxed store package
+        env:
+          DISTRIBUTION: app-store
+          RELEASE: '1'
+          BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+          APPLE_SIGNING_IDENTITY: 19E6B67993578B0F8B305446F14A182588C094D1
+          APPLE_INSTALLER_IDENTITY: CCFDD78721D27D99E7CC0C2FC780610367046C37
+        run: |
+          bun run package
+          codesign --verify --deep --strict dist/app-store/ImageOptimization.app
+          pkgutil --check-signature dist/app-store/*.pkg
+          xcrun altool --validate-app --type osx --file dist/app-store/*.pkg --apiKey "$APP_STORE_CONNECT_API_KEY_ID" --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+      - name: Upload and submit the App Store version
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+          APPLE_REVIEW_CONTACT: ${{ secrets.APPLE_REVIEW_CONTACT }}
+        run: |
+          xcrun altool --upload-app --type osx --file dist/app-store/*.pkg --apiKey "$APP_STORE_CONNECT_API_KEY_ID" --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+          bun scripts/publish-store.ts
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/imageoptimization.keychain-db" || true
+          security delete-keychain "$RUNNER_TEMP/imageoptimization-store.keychain-db" || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/store-app.p12" "$RUNNER_TEMP/store-installer.p12" "$RUNNER_TEMP/store.provisionprofile" "$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"

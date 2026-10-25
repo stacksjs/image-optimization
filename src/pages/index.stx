@@ -1,521 +1,200 @@
-<!DOCTYPE html>
-<html lang="en" class="bg-neutral-200">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ImageOptimization</title>
   <style>
-    /* Use a system font stack so it looks native inside the Craft webview. */
-    :root { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif; }
-    html, body { height: 100%; margin: 0; }
-    body {
-      background:
-        linear-gradient(to bottom, #d6d6d6, #cfcfcf 60%, #c8c8c8);
-      color: #1f1f1f;
-      -webkit-font-smoothing: antialiased;
-      overflow: hidden;
-    }
-
-    .drop-active {
-      border-color: rgba(99, 102, 241, 0.85) !important;
-      background: rgba(99, 102, 241, 0.07);
-    }
-    .drop-active svg { color: rgba(99, 102, 241, 0.85); }
-
-    /* When files are present, the drop zone shrinks into a small affordance
-       at the bottom-right but stays interactive so the user can keep dropping. */
-    .drop-zone-compact {
-      inset: auto !important;
-      bottom: 56px !important;
-      right: 12px !important;
-      width: 96px !important;
-      height: 64px !important;
-      margin: 0 !important;
-      opacity: 0.55;
-      transition: opacity 120ms ease;
-    }
-    .drop-zone-compact:hover, .drop-zone-compact.drop-active {
-      opacity: 1;
-    }
-    .drop-zone-compact svg {
-      width: 32px !important;
-      height: 32px !important;
-    }
-
-    .file-list { font-variant-numeric: tabular-nums; }
-    /* Single-row flex layout. CSS Grid kept wrapping the trailing buttons
-       onto a second row in WKWebView even with `minmax(0, 1fr)`; flex with
-       `flex-wrap: nowrap` (default) is bullet-proof and predictable. */
-    .file-row {
-      display: flex;
-      flex-wrap: nowrap;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 10px 5px 12px;
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-      font-size: 12px;
-    }
-    .file-row .name-cell {
-      flex: 1 1 0;     /* grow to fill, shrink as far as needed */
-      min-width: 0;    /* let children with overflow:hidden actually clip */
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .file-row .name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
-    }
-    .file-row .stat {
-      flex: 0 0 auto;
-      text-align: right;
-      white-space: nowrap;
-    }
-    .file-row .stat-before { width: 60px; color: #737373; }
-    .file-row .stat-after { width: 60px; color: #404040; }
-    .file-row .stat-savings { width: 56px; }
-    .file-row .savings.win { color: #059669; font-weight: 500; }
-    .file-row .savings.none { color: #9ca3af; }
-    .file-row .savings.fail { color: #e11d48; }
-    .file-row .status {
-      width: 14px;
-      height: 14px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .row-btn {
-      flex: 0 0 22px;        /* fixed-width flex item, no shrink, no grow */
-      width: 22px; height: 22px;
-      display: inline-flex; align-items: center; justify-content: center;
-      padding: 0;
-      border-radius: 4px;
-      color: #525252;
-      background: transparent;
-      border: 0;
-      cursor: pointer;
-    }
-    .row-btn:hover { background: rgba(0,0,0,0.06); color: #171717; }
-    .row-btn[aria-disabled="true"] { opacity: 0.3; cursor: default; }
-    .row-btn[aria-disabled="true"]:hover { background: transparent; color: #525252; }
-
-    .spinner {
-      width: 12px; height: 12px;
-      border: 2px solid rgba(0,0,0,0.15);
-      border-top-color: rgba(0,0,0,0.55);
-      border-radius: 999px;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Toolbar message turns red when an error is showing. */
-    .toolbar-error { color: #be123c !important; }
+    :root { color-scheme: light dark; font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #202633; background: #f6f7fa; --panel: #fff; --line: #e6e8ee; --muted: #7b8293; --accent: #5268e8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; }
+    header { padding: 23px 28px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); background: var(--panel); }
+    .app-icon { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(145deg, #7287ff, #495cd4); color: white; display: grid; place-items: center; box-shadow: 0 3px 8px #5268e833; }
+    h1 { font-size: 17px; letter-spacing: -.5px; margin: 0; font-weight: 650; }
+    p { margin: 0; }
+    .muted { color: var(--muted); font-size: 12px; }
+    button { font: inherit; cursor: pointer; border: 1px solid var(--line); color: inherit; background: var(--panel); border-radius: 7px; padding: 7px 12px; }
+    button:hover { border-color: var(--accent); }
+    button:disabled { opacity: .45; cursor: default; }
+    button:focus-visible, .drop:focus-visible { outline: 3px solid #5268e866; outline-offset: 3px; }
+    .primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .add { margin-left: auto; }
+    main { flex: 1; min-height: 0; overflow: auto; padding: 24px 28px; }
+    .drop { width: 100%; min-height: 224px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; border: 1.5px dashed #c9cfe3; border-radius: 12px; background: var(--panel); color: inherit; }
+    .drop-icon { color: var(--accent); margin-bottom: 4px; }
+    .drop strong { font-size: 16px; font-weight: 550; }
+    .formats { margin-top: 20px; text-align: center; color: var(--muted); font-size: 11px; letter-spacing: .8px; }
+    .table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th { color: var(--muted); font-size: 10px; letter-spacing: .9px; text-transform: uppercase; font-weight: 500; text-align: right; padding: 0 10px 12px; }
+    th:first-child { text-align: left; }
+    td { border-top: 1px solid var(--line); padding: 12px 10px; text-align: right; white-space: nowrap; font-size: 12px; }
+    td:first-child { text-align: left; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+    .file-name { font-weight: 550; }
+    .file-note { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+    .saving { color: #159970; font-weight: 600; }
+    .failed { color: #d2475c; font-weight: 600; }
+    .neutral { color: var(--muted); }
+    .row-action { padding: 3px 7px; font-size: 11px; }
+    .drop-mini { margin-top: 14px; padding: 12px; min-height: 0; font-size: 12px; color: var(--muted); }
+    footer { border-top: 1px solid var(--line); background: var(--panel); padding: 13px 28px; display: flex; align-items: center; gap: 14px; min-height: 67px; }
+    .destination { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .summary { flex: 1; }
+    .summary strong { display: block; font-size: 12px; }
+    .privacy { font-size: 10px; color: var(--muted); }
+    .error { color: #d2475c; font-size: 12px; padding: 8px 0; }
+    [hidden] { display: none !important; }
+    @media(prefers-color-scheme:dark) { :root { background:#181a21; color:#e6e9f3; --panel:#20232c; --line:#313541; --muted:#9da5b8; } .drop { border-color:#414965; } }
   </style>
 </head>
-<body class="h-full">
-  <main class="relative h-full">
-    <!-- File list (hidden until first drop) -->
-    <section
-      id="file-list"
-      class="file-list absolute inset-0 bottom-[44px] overflow-auto bg-white/70 backdrop-blur"
-      style="display: none;"
-      aria-label="Optimization results"
-    ></section>
-
-    <!-- Drop zone -->
-    @include('DropZone')
-
-    <!-- Bottom toolbar -->
-    @include('Toolbar')
-
-    <!-- Hidden file input -->
-    <input
-      id="file-input"
-      type="file"
-      multiple
-      accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/bmp,image/svg+xml,image/tiff,image/heic,image/x-icon,.png,.jpg,.jpeg,.webp,.avif,.gif,.bmp,.svg,.tif,.tiff,.ico,.heic,.heif"
-      class="hidden"
-    />
+<body @dragover.prevent @drop.prevent="drop($event)">
+  <header>
+    <div class="app-icon" aria-hidden="true"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3"/><path d="m4 17 5-5 4 4 3-3 4 4"/></svg></div>
+    <div><h1>ImageOptimization</h1><p class="muted">Less weight. Same image.</p></div>
+    <button class="add primary" @click="choose()">＋ Add images</button>
+  </header>
+  <main>
+    <input type="file" multiple accept="image/*,.svg" ref="picker" hidden @change="upload($event)">
+    <div :hidden="files().length > 0">
+      <button class="drop" @click="choose()">
+        <svg class="drop-icon" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <strong>Give your images a little breathing room.</strong>
+        <span class="muted">Drop images here, or click to choose files</span>
+        <span class="muted">Originals preserved. Smaller copies only.</span>
+      </button>
+      <p class="formats">PNG · JPEG · WEBP · GIF · SVG · BMP · AVIF</p>
+    </div>
+    <div :hidden="files().length === 0">
+      <table class="table" aria-label="Image optimization results">
+        <thead><tr><th>Image</th><th>Original</th><th>Optimized</th><th>Saved</th><th></th></tr></thead>
+        <tbody>
+          <template :for="item in files()" :key="item.id">
+            <tr :title="item.outputPath || item.note || ''">
+              <td><div class="file-name">{{ item.name }}</div><div class="file-note">{{ item.status === 'pending' ? 'Optimizing…' : item.status === 'error' ? item.note : item.wrote ? 'Copy saved · original preserved' : item.saved ? 'Ready to save' : item.note || 'Already optimized' }}</div></td>
+              <td>{{ size(item.inputSize) }}</td><td>{{ item.status === 'done' ? size(item.outputSize) : '—' }}</td>
+              <td :class="item.status === 'error' ? 'failed' : item.saved > 0 ? 'saving' : 'neutral'">{{ item.status === 'done' ? item.savedPct.toFixed(1) + '%' : item.status === 'error' ? 'Failed' : '…' }}</td>
+              <td><button class="row-action" :hidden="!item.bytes" @click="download(item)">Save</button> <button class="row-action" :disabled="item.status === 'pending'" @click="remove(item.id)" aria-label="Remove image">×</button></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <button class="drop drop-mini" @click="choose()">＋ Add more images, or drop them anywhere</button>
+    </div>
+    <p class="error" role="alert">{{ error() }}</p>
   </main>
+  <footer>
+    <div class="summary"><strong aria-live="polite">{{ summary() }}</strong><span class="privacy">On your Mac. No uploads. Originals preserved.</span></div>
+    <button class="destination" :hidden="!native()" :disabled="busy()" :title="outputDirectory() || 'Choose where optimized copies are saved'" @click="chooseOutputFolder()">{{ outputDirectory() ? outputDirectory().split('/').pop() + ' ▾' : 'Output folder…' }}</button>
+    <button @click="clear()" :disabled="busy() || files().length === 0">Clear</button>
+  </footer>
+  <script client>
+    import { app, showOpenDialog, isAvailable } from '@stacksjs/desktop/browser'
 
-  <script type="module">
-    const dropZone = document.querySelector('[data-drop-zone]')
-    const list = document.getElementById('file-list')
-    const message = document.querySelector('[data-toolbar-message]')
-    const againBtn = document.querySelector('[data-action="again"]')
-    const addBtn = document.querySelector('[data-action="add"]')
-    const settingsBtn = document.querySelector('[data-action="settings"]')
-    const fileInput = document.getElementById('file-input')
-
-    // Session state — array of items: { id, name, originalSize, originalBytes,
-    // optimizedBytes, optimizedMime, savedBytes, savedPct, note, row, status }.
-    // Status is one of: 'pending' | 'done' | 'fail'.
-    const session = []
-    let nextId = 1
-
-    addBtn.addEventListener('click', () => fileInput.click())
-    settingsBtn.addEventListener('click', () => {
-      transientMessage('Settings: q=85 JPEG · lossless WebP · level-9 PNG · GIF tighten · AVIF strip')
+    const native = state(isAvailable('dialog'))
+    const outputDirectory = state('')
+    const files = state([])
+    const error = state('')
+    const picker = useRef('picker')
+    const busy = derived(() => files().some(item => item.status === 'pending'))
+    const summary = derived(() => {
+      const items = files()
+      if (!items.length) return 'Small files. Full quality.'
+      const saved = items.reduce((total, item) => total + (item.saved || 0), 0)
+      const failed = items.filter(item => item.status === 'error').length
+      return `${items.length} image${items.length === 1 ? '' : 's'} · ${size(saved)} saved${busy() ? ' · working…' : ''}${failed ? ` · ${failed} failed` : ''}`
     })
+    let queue = Promise.resolve()
+    let folderChoice = null
 
-    fileInput.addEventListener('change', (e) => {
-      const files = Array.from(e.target.files || [])
-      if (files.length) processFiles(files)
-      fileInput.value = ''
-    })
-
-    ;['dragenter', 'dragover'].forEach(t => {
-      window.addEventListener(t, (e) => {
-        e.preventDefault()
-        dropZone.classList.add('drop-active')
-      })
-    })
-    ;['dragleave', 'drop'].forEach(t => {
-      window.addEventListener(t, (e) => {
-        e.preventDefault()
-        if (t === 'dragleave' && e.relatedTarget) return
-        dropZone.classList.remove('drop-active')
-      })
-    })
-
-    // When running inside a Craft native window, the platform fires
-    // `craft:fileDrop` with the dropped files' real filesystem paths
-    // *before* the standard JS `drop` event runs. We prefer those paths
-    // because they let the server overwrite the originals in place — the
-    // real ImageOptim behaviour. We mark a counter the matching `drop`
-    // handler decrements so we don't double-process.
-    //
-    // A bool + queueMicrotask was earlier — but that race-clobbered when
-    // the user dropped two files in close succession (the second drop's
-    // microtask reset the bool *before* the first drop's handler ran).
-    // A counter is rate-safe: each native drop increments, each
-    // matching browser drop decrements.
-    let pendingNativeDrops = 0
-    window.addEventListener('craft:fileDrop', (e) => {
-      const paths = (e.detail && e.detail.paths) || []
-      if (!paths.length) return
-      pendingNativeDrops++
-      processPaths(paths)
-    })
-
-    window.addEventListener('drop', (e) => {
-      e.preventDefault()
-      if (pendingNativeDrops > 0) {
-        pendingNativeDrops--
-        return
-      }
-      const files = Array.from(e.dataTransfer?.files || [])
-      if (files.length) processFiles(files)
-    })
-
-    againBtn.addEventListener('click', async () => {
-      const redoable = session.filter(it => it.status !== 'pending' && it.originalBytes)
-      if (!redoable.length) return
-      setAgainEnabled(false)
-      for (const item of redoable) {
-        markPending(item)
-        await runOne(item, new Uint8Array(item.originalBytes))
-      }
-      summarize()
-    })
-
-    function fmtBytes(n) {
-      if (n < 1024) return n + ' B'
-      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
-      return (n / 1024 / 1024).toFixed(2) + ' MB'
+    function size(value) {
+      if (!value) return '0 B'
+      if (value < 1024) return `${value} B`
+      if (value < 1048576) return `${(value / 1024).toFixed(1)} KB`
+      return `${(value / 1048576).toFixed(2)} MB`
     }
-
-    function ensureListVisible() {
-      if (list.style.display === 'none') {
-        list.style.display = 'block'
-        // Keep the drop zone visible (compact) so users can drop more files.
-        dropZone.classList.add('drop-zone-compact')
+    function update(id, patch) {
+      files.set(files().map(item => item.id === id ? { ...item, ...patch } : item))
+    }
+    function enqueue(entries) {
+      error.set('')
+      for (const entry of entries) {
+        if (entry.path && files().some(item => item.path === entry.path)) continue
+        const item = { id: crypto.randomUUID(), inputSize: 0, outputSize: 0, saved: 0, savedPct: 0, status: 'pending', ...entry, outputDirectory: entry.path ? outputDirectory() : '' }
+        files.set([...files(), item])
+        queue = queue.then(() => run(item)).catch(err => error.set(err.message))
       }
     }
-
-    function ensureDropZoneFull() {
-      if (session.length === 0) {
-        list.style.display = 'none'
-        dropZone.classList.remove('drop-zone-compact')
-      }
-    }
-
-    function makeRow(item) {
-      const row = document.createElement('div')
-      row.className = 'file-row'
-      row.innerHTML = `
-        <div class="name-cell">
-          <span class="status" data-status><span class="spinner"></span></span>
-          <span class="name" data-name></span>
-        </div>
-        <span class="stat stat-before" data-before></span>
-        <span class="stat stat-after" data-after>—</span>
-        <span class="stat stat-savings savings none" data-savings>—</span>
-        <button class="row-btn" data-row-action="download" aria-disabled="true" title="Download optimized">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-            <path d="M12 4v12m-5-5l5 5 5-5M5 20h14" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <button class="row-btn" data-row-action="remove" title="Remove">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-            <path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/>
-          </svg>
-        </button>
-      `
-      row.querySelector('[data-name]').textContent = item.name
-      row.querySelector('[data-before]').textContent = fmtBytes(item.originalSize)
-      row.querySelector('[data-row-action="download"]').addEventListener('click', () => downloadOne(item))
-      row.querySelector('[data-row-action="remove"]').addEventListener('click', () => removeOne(item))
-      list.appendChild(row)
-      return row
-    }
-
-    async function processFiles(files) {
-      ensureListVisible()
-      message.classList.remove('toolbar-error')
-      message.textContent = `${files.length} file${files.length === 1 ? '' : 's'} queued…`
-      for (const file of files) {
-        const item = {
-          id: nextId++,
-          name: file.name,
-          originalSize: file.size,
-          originalBytes: await file.arrayBuffer(),
-          optimizedBytes: null,
-          optimizedMime: file.type || 'application/octet-stream',
-          savedBytes: 0,
-          savedPct: 0,
-          note: null,
-          row: null,
-          status: 'pending',
-          path: null,
-        }
-        item.row = makeRow(item)
-        session.push(item)
-        await runOne(item, new Uint8Array(item.originalBytes))
-      }
-      summarize()
-    }
-
-    // Native-window path: the server reads/writes the file itself, so we
-    // don't need to upload bytes — just hand it the absolute path. We
-    // still create a row per file for live progress, and capture the
-    // path so the row can show "saved in place".
-    async function processPaths(paths) {
-      ensureListVisible()
-      message.classList.remove('toolbar-error')
-      message.textContent = `${paths.length} file${paths.length === 1 ? '' : 's'} queued…`
-      for (const path of paths) {
-        const name = path.slice(path.lastIndexOf('/') + 1)
-        const item = {
-          id: nextId++,
-          name,
-          originalSize: 0,
-          originalBytes: null,
-          optimizedBytes: null,
-          optimizedMime: 'application/octet-stream',
-          savedBytes: 0,
-          savedPct: 0,
-          note: null,
-          row: null,
-          status: 'pending',
-          path,
-        }
-        item.row = makeRow(item)
-        session.push(item)
-        await runPath(item)
-      }
-      summarize()
-    }
-
-    async function runPath(item) {
+    async function run(item) {
       try {
-        const resp = await fetch('/optimize?path=' + encodeURIComponent(item.path), { method: 'POST' })
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '')
-          throw new Error(`HTTP ${resp.status}: ${text || resp.statusText}`)
-        }
-        const rawHeader = resp.headers.get('x-stx-result') || ''
-        const meta = rawHeader ? JSON.parse(decodeURIComponent(rawHeader)) : {}
-
-        item.originalSize = meta.inputSize ?? 0
-        item.savedBytes = meta.saved ?? 0
-        item.savedPct = meta.savedPct ?? 0
-        item.note = meta.note ?? null
-        item.status = 'done'
-        item.wrote = !!meta.wrote
-
-        const before = item.row.querySelector('[data-before]')
-        const status = item.row.querySelector('[data-status]')
-        const after = item.row.querySelector('[data-after]')
-        const savings = item.row.querySelector('[data-savings]')
-        const dl = item.row.querySelector('[data-row-action="download"]')
-
-        before.textContent = fmtBytes(meta.inputSize ?? 0)
-        after.textContent = fmtBytes(meta.outputSize ?? meta.inputSize ?? 0)
-
-        if ((meta.saved ?? 0) > 0) {
-          savings.textContent = '−' + (meta.savedPct ?? 0).toFixed(1) + '%'
-          savings.className = 'savings win'
-          status.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="h-3 w-3 text-emerald-500"><path d="M5 12l5 5 9-11" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-        }
-        else {
-          savings.textContent = '0%'
-          savings.className = 'savings none'
-          status.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="h-3 w-3 text-neutral-400"><path d="M5 12h14" stroke-linecap="round"/></svg>'
-        }
-
-        // Native runs already wrote the optimised bytes to disk, so the
-        // download button is meaningless — disable it permanently and
-        // surface the file path on hover instead.
-        dl.setAttribute('aria-disabled', 'true')
-        dl.title = 'Already saved in place'
-        item.row.title = (meta.note ?? '') + (meta.wrote ? '  ·  saved in place' : '  ·  no change')
-      }
-      catch (err) {
-        item.status = 'fail'
-        const status = item.row.querySelector('[data-status]')
-        const savings = item.row.querySelector('[data-savings]')
-        status.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="h-3 w-3 text-rose-500"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg>'
-        savings.textContent = 'fail'
-        savings.className = 'savings fail'
-        item.row.title = err.message
-        message.classList.add('toolbar-error')
-        message.textContent = `Error: ${err.message}`
-      }
-
-      setAgainEnabled(session.some(it => it.status === 'done' && it.originalBytes))
-    }
-
-    function markPending(item) {
-      item.status = 'pending'
-      const status = item.row.querySelector('[data-status]')
-      const after = item.row.querySelector('[data-after]')
-      const savings = item.row.querySelector('[data-savings]')
-      const dl = item.row.querySelector('[data-row-action="download"]')
-      status.innerHTML = '<span class="spinner"></span>'
-      after.textContent = '—'
-      savings.textContent = '—'
-      savings.className = 'savings none'
-      dl.setAttribute('aria-disabled', 'true')
-    }
-
-    async function runOne(item, bytes) {
-      try {
-        const resp = await fetch('/optimize?name=' + encodeURIComponent(item.name), {
+        const query = item.path ? `path=${encodeURIComponent(item.path)}${item.outputDirectory ? `&outputDirectory=${encodeURIComponent(item.outputDirectory)}` : ''}` : `name=${encodeURIComponent(item.name)}`
+        const response = await fetch(`/optimize?${query}`, {
           method: 'POST',
           headers: { 'content-type': 'application/octet-stream' },
-          body: bytes,
+          body: item.file ? await item.file.arrayBuffer() : undefined,
         })
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '')
-          throw new Error(`HTTP ${resp.status}: ${text || resp.statusText}`)
-        }
-        // Server URL-encodes the header value so non-ASCII text survives.
-        const rawHeader = resp.headers.get('x-stx-result') || ''
-        const meta = rawHeader ? JSON.parse(decodeURIComponent(rawHeader)) : {}
-        const out = await resp.arrayBuffer()
-        item.optimizedBytes = out
-        item.savedBytes = meta.saved ?? 0
-        item.savedPct = meta.savedPct ?? 0
-        item.note = meta.note ?? null
-        item.status = 'done'
-
-        const status = item.row.querySelector('[data-status]')
-        const after = item.row.querySelector('[data-after]')
-        const savings = item.row.querySelector('[data-savings]')
-        const dl = item.row.querySelector('[data-row-action="download"]')
-
-        after.textContent = fmtBytes(meta.outputSize ?? out.byteLength)
-
-        if ((meta.saved ?? 0) > 0) {
-          savings.textContent = '−' + (meta.savedPct ?? 0).toFixed(1) + '%'
-          savings.className = 'savings win'
-          status.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="h-3 w-3 text-emerald-500"><path d="M5 12l5 5 9-11" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-          dl.setAttribute('aria-disabled', 'false')
-        }
-        else {
-          savings.textContent = '0%'
-          savings.className = 'savings none'
-          status.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="h-3 w-3 text-neutral-400"><path d="M5 12h14" stroke-linecap="round"/></svg>'
-          // Even on 0% we offer the "download" — it's the original bytes, but useful for re-runs.
-          dl.setAttribute('aria-disabled', 'false')
-        }
-
-        item.row.title = meta.note ?? ''
+        if (!response.ok) throw new Error(await response.text())
+        const meta = JSON.parse(decodeURIComponent(response.headers.get('x-stx-result') || '%7B%7D'))
+        const bytes = item.path ? null : await response.arrayBuffer()
+        update(item.id, { ...meta, bytes, file: null, status: 'done' })
       }
       catch (err) {
-        item.status = 'fail'
-        const status = item.row.querySelector('[data-status]')
-        const savings = item.row.querySelector('[data-savings]')
-        status.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="h-3 w-3 text-rose-500"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg>'
-        savings.textContent = 'fail'
-        savings.className = 'savings fail'
-        item.row.title = err.message
-        message.classList.add('toolbar-error')
-        message.textContent = `Error: ${err.message}`
+        update(item.id, { status: 'error', file: null, note: err.message })
+        error.set(`${item.name}: ${err.message}`)
       }
-
-      setAgainEnabled(session.some(it => it.status === 'done'))
     }
-
-    function downloadOne(item) {
-      if (!item.optimizedBytes) return
-      const blob = new Blob([item.optimizedBytes], { type: item.optimizedMime })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = item.name
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      // Free the blob URL on next tick so the click had time to start the download.
+    async function choose() {
+      try {
+        if (isAvailable('dialog')) {
+          const chosen = await showOpenDialog({ title: 'Choose images to optimize', multiSelections: true, filters: [{ name: 'Images', extensions: ['png','jpg','jpeg','webp','gif','svg','bmp','avif'] }] })
+          if (!chosen.canceled) await paths(chosen.filePaths)
+        }
+        else picker()?.click()
+      }
+      catch (err) { error.set(`Could not open images: ${err.message}`) }
+    }
+    async function chooseOutputFolder() {
+      if (!native()) return false
+      if (folderChoice) return await folderChoice
+      folderChoice = (async () => {
+        const chosen = await showOpenDialog({ title: 'Choose a folder for optimized copies', canChooseDirectories: true, canChooseFiles: false, canCreateDirectories: true, buttonLabel: 'Save copies here' })
+        if (chosen.canceled || !chosen.filePaths.length) return false
+        error.set('')
+        outputDirectory.set(chosen.filePaths[0])
+        return true
+      })()
+      try { return await folderChoice }
+      catch (err) { error.set(`Could not choose an output folder: ${err.message}`); return false }
+      finally { folderChoice = null }
+    }
+    async function paths(values) {
+      try {
+        if (!values.length) return
+        const info = await app.getInfo()
+        if (info.sandboxed && !outputDirectory() && !await chooseOutputFolder()) return
+        enqueue(values.map(path => ({ path, name: path.split('/').pop() })))
+      }
+      catch (err) { error.set(`Could not open images: ${err.message}`) }
+    }
+    function upload(event) {
+      enqueue(Array.from(event.target.files || []).map(file => ({ name: file.name, file, inputSize: file.size })))
+      event.target.value = ''
+    }
+    function drop(event) {
+      // Craft consumes native drops itself and emits paths once. Ignoring the
+      // WebView event prevents duplicate work regardless of event ordering.
+      if (isAvailable('dialog')) return
+      enqueue(Array.from(event.dataTransfer?.files || []).map(file => ({ name: file.name, file, inputSize: file.size })))
+    }
+    function download(item) {
+      const url = URL.createObjectURL(new Blob([item.bytes]))
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = item.name
+      anchor.click()
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
-
-    function removeOne(item) {
-      const idx = session.indexOf(item)
-      if (idx >= 0) session.splice(idx, 1)
-      item.row.remove()
-      summarize()
-      ensureDropZoneFull()
-      setAgainEnabled(session.some(it => it.status === 'done'))
-    }
-
-    function setAgainEnabled(on) {
-      againBtn.disabled = !on
-    }
-
-    function summarize() {
-      if (session.length === 0) {
-        message.classList.remove('toolbar-error')
-        message.textContent = 'Drag and drop image files onto the area above'
-        return
-      }
-      let totalIn = 0, totalSaved = 0, failCount = 0, wroteCount = 0
-      for (const it of session) {
-        totalIn += it.originalSize
-        if (it.status === 'fail') failCount++
-        else totalSaved += it.savedBytes || 0
-        if (it.wrote) wroteCount++
-      }
-      const pct = totalIn === 0 ? 0 : (totalSaved / totalIn) * 100
-      message.classList.remove('toolbar-error')
-      const failNote = failCount > 0 ? ` · ${failCount} failed` : ''
-      const wroteNote = wroteCount > 0 ? ` · ${wroteCount} saved in place` : ''
-      message.textContent = `${session.length} file${session.length === 1 ? '' : 's'} · saved ${fmtBytes(Math.max(0, totalSaved))} (${pct.toFixed(1)}%)${wroteNote}${failNote}`
-    }
-
-    let transientTimer = null
-    function transientMessage(text) {
-      if (transientTimer) clearTimeout(transientTimer)
-      message.classList.remove('toolbar-error')
-      message.textContent = text
-      transientTimer = setTimeout(summarize, 2500)
-    }
-
-    setAgainEnabled(false)
+    function remove(id) { files.set(files().filter(item => item.id !== id)) }
+    function clear() { files.set([]); error.set('') }
+    useEventListener('craft:fileDrop', event => paths(event.detail?.paths || []))
   </script>
 </body>
 </html>

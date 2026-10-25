@@ -1,173 +1,98 @@
-<p align="center"><img src=".github/art/cover.jpg" alt="image-optimization — native-style image optimization, built on stx + Bun"></p>
+# ImageOptimization
 
-[![GitHub Actions][github-actions-src]][github-actions-href]
-[![License][license-src]][license-href]
-[![Made with stx][stx-badge-src]][stx-badge-href]
+A small, private macOS app for making images lighter. Built with **Stacks, STX and Craft**, using our TypeScript image codecs. Everything runs locally; originals stay untouched.
 
-# image-optimization
+![ImageOptimization running natively on macOS](.github/art/screenshot.jpg)
 
-A native-style image-optimization app modelled on [ImageOptim](https://imageoptim.com), built with [stx](https://github.com/stacksjs/stx) + [Bun](https://bun.sh) and our pure-TypeScript image libraries.
+The screenshot shows synthetic test images processed in the real native app. Savings depend on the source image.
 
-**No runtime dependencies beyond Bun and the `ts-*` libs** — every codec is in-process TypeScript:
+To update the store artwork, capture the actual native app and run `bun run screenshot /absolute/path/to/native-capture`. The exporter detects the capture's encoded format and uses our JPEG codec to produce the baseline JFIF uploaded by the release pipeline.
 
-| Format | Library |
-|--------|---------|
-| PNG    | [`@stacksjs/ts-png`](https://github.com/stacksjs/ts-png) |
-| JPEG   | [`ts-jpeg`](https://github.com/stacksjs/ts-jpeg) |
-| WebP   | [`@stacksjs/ts-webp`](https://github.com/stacksjs/ts-webp) |
-| BMP    | [`@stacksjs/ts-bmp`](https://github.com/stacksjs/ts-bmp) |
-| GIF    | [`ts-gif`](https://github.com/stacksjs/ts-gif) |
-| AVIF   | [`@stacksjs/ts-avif`](https://github.com/stacksjs/ts-avif) |
-| SVG    | text minify (CDATA-aware) |
+## Use it
 
-```
-┌──────────────────────────────────────────────────────────┐
-│ ●●●            ImageOptimization                         │
-├──────────────────────────────────────────────────────────┤
-│  cover.jpg     84.2 KB   21.0 KB   −75.0%  ⬇  ✕         │
-│  hero.png       1.2 MB    872 KB   −28.4%  ⬇  ✕         │
-│  banner.gif      62 KB    21 KB    −64.9%  ⬇  ✕         │
-│                                                ┌────┐    │
-│                                                │ ↓  │    │
-│                                                └────┘    │
-├──────────────────────────────────────────────────────────┤
-│  +  3 files · saved 1.4 MB (66.2%)            ⋯  ↻ Again │
-└──────────────────────────────────────────────────────────┘
+Download the notarized DMG from [Releases](https://github.com/stacksjs/image-optimization/releases/latest), then drag **ImageOptimization** into Applications. Requires macOS 15 or newer on Apple Silicon. Intel and other platforms have not been verified.
+
+Choose **Add images**, or drop files onto the window. The App Store version asks for an output folder through the native picker. The DMG version saves beside originals by default; **Output folder…** selects another destination. Smaller results are named `photo.optimized.png`. Existing files are never replaced; subsequent copies get a numbered suffix. Already optimized files are left alone. Batch processing is queued, and failures appear beside the affected image.
+
+## Develop
+
+```sh
+pantry install
+eval "$(pantry env)"        # activate the declared Bun and Craft runtimes
+bun install --frozen-lockfile
+./buddy dev                 # compile and launch the native app
+./buddy build               # dist/ImageOptimization.app
+./buddy upgrade             # update the declared dependencies
+bun test tests
+bun run lint
+bun run test:e2e            # exercise the compiled application
+bun run build:dmg           # create a local DMG
 ```
 
-## Install
+`buddy new . --native --adopt` integrates this repository with Stacks. The app configuration is in `craft.config.ts`; no database, web server deployment or framework vendor tree is required. Craft is resolved from PATH through Pantry. Framework contributors can set `CRAFT_BIN` to a compiled Craft executable.
 
-Download the latest `.dmg` from [Releases](https://github.com/stacksjs/image-optimization/releases/latest), drag the `.app` into `/Applications`, done.
+The installed app contains one compiled Bun backend and Craft’s official webview runtime profile. That profile keeps the native window, bridge and backend host while omitting Craft’s separate headless scripting engine. It needs no installed Bun, external codecs, network service or development checkout. Most of the bundle is its single embedded processing runtime. CI enforces a 100,000 KiB bundle budget.
 
-## Run from source
+Application code is TypeScript and STX. Native platform implementations belong in Craft and shared STX APIs; the application contains no Swift or Kotlin.
 
-```bash
-bun run setup        # provision system + JS deps (pantry install + bun install)
-bun run dev          # browser
-bun run dev:native   # native Craft window (macOS)
+## Image handling
+
+| Format | Processing |
+| --- | --- |
+| PNG | Recompress the original IDAT stream; retain bit depth, palettes, profiles, EXIF and APNG frame chunks. |
+| JPEG | Remove comments without re-encoding pixels; retain EXIF orientation, ICC profiles and progressive scans. MPF/MPO files pass through unchanged. |
+| WebP | Lossless re-encoding for static images; animated images and files with color/EXIF/XMP metadata pass through unchanged. |
+| GIF | Palette tightening through `ts-gif`; retain canvas, looping, timing and interlacing. Application profiles and plain-text graphic blocks pass through unchanged. |
+| SVG | Parse and remove comments through `@stacksjs/ts-svg`; preserve text spacing. |
+| BMP | Re-encode; omit the alpha channel only when fully opaque. |
+| AVIF | Container optimization; retain alpha, EXIF, XMP, color profiles and derived images. Animated sequences pass through unchanged. |
+| TIFF, ICO, HEIC and unknown | Pass through with a format note. |
+
+Output is used only when smaller. Invalid supported images report an error. Input is capped at 32 MiB; PNG inflation is capped at 256 MiB. WebP and BMP decoding is limited to 32 megapixels. GIFs are limited to 64 megapixels across frames.
+
+The codecs live in their own repositories: [ts-png](https://github.com/stacksjs/ts-png), [ts-jpeg](https://github.com/stacksjs/ts-jpeg), [ts-webp](https://github.com/stacksjs/ts-webp), [ts-gif](https://github.com/stacksjs/ts-gif), [ts-svg](https://github.com/stacksjs/ts-svg), [ts-bmp](https://github.com/stacksjs/ts-bmp), and [ts-avif](https://github.com/stacksjs/ts-avif). Shared fixes are made there and consumed as versioned packages.
+
+## Native architecture
+
+STX compiles the interface and TypeScript backend into the app. Craft is the main macOS application process and supplies WKWebView, native file and folder panels, and file drops. It starts the bundled `stx-backend` helper and holds a lifetime pipe; the helper exits when Craft closes, including AppKit termination. The backend listens on an ephemeral loopback port, with a single-use launch session, HttpOnly SameSite cookie, and Host/Origin checks. Foreign pages cannot call the filesystem API.
+
+New copies are written completely and synced before an atomic, non-replacing link makes them visible. Symlinks and directories are rejected. The backend stops when the native window closes. The UI holds only one batch queue and releases upload buffers after processing.
+
+## Releases
+
+A `v*` tag or a manual **Release macOS** workflow runs tests, builds the native app, tests the compiled executable from an unrelated directory, imports the signing identity into a temporary keychain, signs with the hardened runtime, notarizes with Apple's API, staples the DMG, verifies it, and publishes the installer with SHA-256 checksums. Signing or notarization failure stops publication.
+
+From a clean `main` checkout, `bun run release:patch` bumps the version, commits it, and pushes the release tag to start that pipeline. Minor and major releases have matching commands.
+
+The repository uses these GitHub secrets: `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, and `APP_STORE_CONNECT_API_KEY`. API key ID and issuer ID are repository variables. Credentials never enter the application bundle.
+
+For a signed local release, set `APPLE_SIGNING_IDENTITY` and either `APPLE_NOTARY_PROFILE` or the three `APP_STORE_CONNECT_API_KEY_PATH`, `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_API_ISSUER_ID` values, then run:
+
+```sh
+bun run build
+RELEASE=1 bun run package
 ```
 
-Bun is the only system requirement — declared in `deps.yaml` and provisioned by [pantry](https://github.com/home-lang/pantry) when you run `pantry install` (or `bun run setup`). Everything else is a regular `package.json` dependency.
+The same workflow prepares store metadata and screenshots before packaging the Mac App Store build with Craft’s matching public API only runtime, the app sandbox,
+an embedded provisioning profile, a privacy manifest, and separate inherited
+helper entitlements. It validates the signed PKG with Apple, uploads it, waits
+for processing, reconciles `app-store.config.ts`, selects the build, and submits it
+for review. Apple controls approval and the date the store listing becomes live.
+The publisher uses Pantry's App Store Connect API client and asset library,
+including upload integrity checks, dynamic screenshot specifications and
+idempotent review retries.
 
-The `--native` flag relies on:
+Store signing uses `APPLE_STORE_APPLICATION_CERTIFICATE_BASE64`,
+`APPLE_STORE_INSTALLER_CERTIFICATE_BASE64`, `APPLE_STORE_CERTIFICATE_PASSWORD`,
+`APPLE_STORE_PROVISIONING_PROFILE` and `APPLE_REVIEW_CONTACT`. Review contact is
+private JSON with `firstName`, `lastName`, `phone`, and `email`. Signed artifacts
+land in `dist/direct/` and `dist/app-store/`. A store build requires a unique
+`BUILD_NUMBER`; CI uses the workflow run and attempt numbers.
 
-- `@stacksjs/desktop` being built in the local stx repo
-- the `craft` binary on your `$PATH` (or at `~/.bun/bin/craft` / `CRAFT_BINARY_PATH=…`)
-
-If `--native` can't find a craft binary, it transparently falls back to opening the system browser at the dev URL.
-
-## Distribution
-
-### `.dmg` builds
-
-Pushing a `v*` tag triggers `.github/workflows/release.yml` which:
-
-1. Spins up a **macOS** runner
-2. Uses **pantry** to provision `bun` + `craft-native.org` (the native shell binary) — declared in [`deps.yaml`](./deps.yaml)
-3. Builds the stx site with `bun run build`
-4. Calls `packageApp()` from [`@craft-native/craft`](https://github.com/stacksjs/craft) to produce a signed-or-unsigned `.app` and a `.dmg` (via `hdiutil`)
-5. Uploads the `.dmg` to the GitHub Release via [`stacksjs/action-releaser`](https://github.com/stacksjs/action-releaser)
-
-The packaging logic lives in [`scripts/package.ts`](./scripts/package.ts). To package locally:
-
-```bash
-bun run build:dmg
-# → dist/ImageOptimization-<version>.dmg
-```
-
-Optional code-signing / notarization: provide `APPLE_SIGN_IDENTITY`, `APPLE_ID`, and `APPLE_APP_PASSWORD` as repo secrets and the workflow forwards them to `packageApp`.
-
-### Pantry registry
-
-```bash
-bun run release:patch   # 0.0.1 → 0.0.2 → tag → workflow runs → DMG on Releases
-bun run release:minor   # 0.0.x → 0.1.0 → tag → workflow runs → DMG on Releases
-```
-
-Continuous-release tarballs are also published to the pantry registry at `registry.pantry.dev` on every push to `main` (see [`ci.yml`](./.github/workflows/ci.yml)). Auth: `PANTRY_REGISTRY_TOKEN` repo secret.
-
-## Architecture
-
-```
-┌──────────────────────────────────────┐
-│  Craft native window (WKWebView)     │  ← UI
-│   (or system browser w/o --native)   │
-└────────────────┬─────────────────────┘
-                 │ fetch /optimize
-                 ▼
-┌──────────────────────────────────────┐
-│  stx dev server (Bun.serve)          │  ← server
-│   ├ /         → src/pages/index.stx  │
-│   └ /optimize → apiRoutes (config)   │
-└────────────────┬─────────────────────┘
-                 │ dispatch by magic bytes
-                 ▼
-┌──────────────────────────────────────────────────────────┐
-│  ts-png · ts-jpeg · ts-webp · ts-bmp · ts-gif · ts-avif  │  ← image libs
-│   (pure TS, zero runtime deps)                            │
-└──────────────────────────────────────────────────────────┘
-```
-
-## Format coverage
-
-| Format | Strategy |
-|--------|----------|
-| PNG    | decode → re-deflate at level 9 across 4 strategies, keep smallest |
-| JPEG   | decode → re-encode at q=85 (note: drops EXIF / orientation) |
-| WebP   | decode → re-encode lossless |
-| BMP    | decode → re-encode (drops alpha when fully opaque) |
-| SVG    | text minify, CDATA-aware |
-| GIF    | palette tightening per-frame + global-palette consolidation (lossless) |
-| AVIF   | ISOBMFF re-mux: strip Exif/XMP/`mime` items, thumbnails, redundant brands |
-| TIFF · ICO · HEIC | detected and reported, no optimizer yet (passthrough w/ note) |
-
-Output is only kept when smaller than the input — already-optimized files come back unchanged with `passthrough: true` in `x-stx-result`.
-
-## UX
-
-- **Drag and drop** any number of images onto the window
-- **Click `+`** to pick files via the system dialog
-- **Per-row download** to save the optimized bytes
-- **Per-row remove** to drop a file from the list
-- **Toolbar summary** shows total bytes saved across all rows in real time
-- **`Again`** re-runs the optimizer on every file (useful after a settings change)
-- After the first drop, the **drop zone shrinks into the corner** but stays interactive
-- **Errors surface in the toolbar in red** so failures aren't silent
-
-## Layout
-
-```
-image-optimization/
-├── src/
-│   ├── pages/
-│   │   └── index.stx       — the ImageOptim UI (drop zone, list, toolbar)
-│   ├── components/
-│   │   ├── DropZone.stx    — full-window drop target
-│   │   ├── Toolbar.stx     — bottom action bar
-│   │   └── FileRow.stx     — per-file row template
-│   └── optimize.ts         — magic-byte format detection → per-format pipeline
-├── scripts/
-│   └── package.ts          — builds .app + .dmg via @craft-native/craft
-├── .config/
-│   ├── stx.ts              — registers /optimize via apiRoutes
-│   └── crosswind.ts        — content paths for utility-class generation
-├── deps.yaml               — pantry-provisioned system deps (bun, craft)
-└── package.json
-```
-
-## Notes on dependencies
-
-The image libs are imported by relative path from `~/Code/Libraries/ts-*`, and stx itself is invoked via the local repo at `~/Code/Tools/stx/stx`. This mirrors how the example in the stx monorepo is wired up — the libs remain editable in place rather than being copied into `node_modules`.
+The one-time app record and privacy label are managed in App Store Connect.
+No Apple credentials, private keys, or review contact details are committed.
+See [Privacy policy](PRIVACY.md) for the app's local data handling.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE.md)
-
-<!-- Badges -->
-
-[github-actions-src]: https://img.shields.io/github/actions/workflow/status/stacksjs/image-optimization/ci.yml?branch=main&style=flat&colorA=18181B&colorB=4F46E5
-[github-actions-href]: https://github.com/stacksjs/image-optimization/actions/workflows/ci.yml
-[license-src]: https://img.shields.io/github/license/stacksjs/image-optimization.svg?style=flat&colorA=18181B&colorB=4F46E5
-[license-href]: ./LICENSE.md
-[stx-badge-src]: https://img.shields.io/badge/built%20with-stx-4F46E5?style=flat&colorA=18181B
-[stx-badge-href]: https://github.com/stacksjs/stx
+[MIT](LICENSE.md) © Chris Breuer

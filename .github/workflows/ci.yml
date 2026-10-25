@@ -1,64 +1,40 @@
 name: CI
-
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
   pull_request:
-    branches:
-      - main
-
+    branches: [main]
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
-
+permissions:
+  contents: read
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6.0.2
-
-      - name: Setup Pantry
-        # The action installs bun via deps.yaml and adds it to PATH, so
-        # there's no separate `oven-sh/setup-bun` step needed.
-        uses: home-lang/pantry/packages/action@main
-
-      - name: Use cached node_modules
-        uses: actions/cache@v5.0.3
-        with:
-          path: node_modules
-          key: node-modules-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            node-modules-
-
-      - name: Install Dependencies
-        run: bun install
-
-      - name: Build
-        run: bun run build
-
-  publish-commit:
-    needs: [build]
-    runs-on: ubuntu-latest
-
+  native:
+    runs-on: macos-15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+      - uses: pantry-pm/pantry/packages/action@e632b04fb1a8093e7c940c1dbd8ae4fb9b09bf5d
         with:
-          fetch-depth: 0
-
-      - name: Setup Pantry
-        uses: home-lang/pantry/packages/action@main
-
-      - name: Install Dependencies
-        run: bun install
-
-      - name: Build
-        run: bun run build
-
-      - name: Publish Commit
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: pantry publish:commit '.'
-        env:
-          PANTRY_REGISTRY_TOKEN: ${{ secrets.PANTRY_TOKEN }}
+          version: '0.11.130'
+          install: 'false'
+          packages: bun.com@1.4.4 craft-native.org@0.0.350.1
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun test tests
+      - run: ./buddy build
+      - run: bun run test:e2e
+      - name: Check native payload and source boundary
+        run: |
+          file dist/ImageOptimization.app/Contents/MacOS/ImageOptimization | grep 'Mach-O.*arm64'
+          file dist/ImageOptimization.app/Contents/MacOS/stx-backend | grep 'Mach-O.*arm64'
+          test -z "$(git ls-files '*.swift' '*.kt' '*.kts' '*.xcodeproj/*' '*.xcworkspace/*')"
+          test "$(du -sk dist/ImageOptimization.app | cut -f1)" -lt 100000
+      - name: Archive the native app with executable permissions
+        run: ditto -c -k --keepParent dist/ImageOptimization.app dist/ImageOptimization.zip
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ImageOptimization-app
+          path: dist/ImageOptimization.zip

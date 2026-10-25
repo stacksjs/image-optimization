@@ -7,14 +7,13 @@
  * No external deps — only Bun + our own ts-{png,jpeg,webp,avif,gif,bmp,svg}.
  */
 
-import { Buffer } from 'node:buffer'
-
-import png from '@stacksjs/ts-png'
+import { optimize as optimizePngBytes } from '@stacksjs/ts-png'
 import * as jpeg from 'ts-jpeg'
 import * as webp from '@stacksjs/ts-webp'
 import * as bmp from '@stacksjs/ts-bmp'
 import * as gif from 'ts-gif'
 import * as avif from '@stacksjs/ts-avif'
+import { optimize as optimizeSvgText } from '@stacksjs/ts-svg'
 
 export type ImageFormat =
   | 'png' | 'jpeg' | 'webp' | 'avif' | 'gif' | 'bmp' | 'svg'
@@ -43,7 +42,7 @@ export function detectFormat(buf: Uint8Array): ImageFormat {
   if (buf.length < 4) return 'unknown'
 
   // PNG: 89 50 4E 47 0D 0A 1A 0A
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'png'
+  if (buf.length >= 8 && [137,80,78,71,13,10,26,10].every((value, i) => buf[i] === value)) return 'png'
 
   // JPEG: FF D8 FF
   if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'jpeg'
@@ -77,13 +76,13 @@ export function detectFormat(buf: Uint8Array): ImageFormat {
     if (brand === 'heic' || brand === 'heix' || brand === 'hevc' || brand === 'hevx') return 'heic'
     // `mif1` is generic MIAF — could be either. Look at compatible-brand list.
     if (brand === 'mif1') {
-      const end = Math.min(buf.length, 8 + new DataView(buf.buffer, buf.byteOffset).getUint32(0))
+      const end = Math.min(buf.length, new DataView(buf.buffer, buf.byteOffset).getUint32(0))
       for (let off = 16; off + 4 <= end; off += 4) {
         const tag = String.fromCharCode(buf[off], buf[off + 1], buf[off + 2], buf[off + 3])
         if (tag === 'avif' || tag === 'avis') return 'avif'
         if (tag === 'heic' || tag === 'heix' || tag === 'hevc' || tag === 'hevx') return 'heic'
       }
-      return 'avif' // default to AVIF — most mif1-major files in the wild are AVIF
+      return 'unknown'
     }
   }
 
@@ -92,8 +91,7 @@ export function detectFormat(buf: Uint8Array): ImageFormat {
   if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) i = 3
   while (i < buf.length && buf[i] <= 0x20) i++
   if (buf[i] === 0x3C) {
-    const head = new TextDecoder().decode(buf.subarray(i, Math.min(buf.length, i + 100))).toLowerCase()
-    if (head.startsWith('<?xml') || head.startsWith('<svg') || head.startsWith('<!doctype svg')) return 'svg'
+    if (/<svg(?:\s|>)/i.test(new TextDecoder().decode(buf.subarray(i, Math.min(buf.length, i + 4096))))) return 'svg'
   }
 
   return 'unknown'
@@ -105,22 +103,7 @@ export async function optimize(input: Uint8Array, hintExt?: string): Promise<Opt
   const detected = detectFormat(input)
   const format = detected === 'unknown' ? formatFromExt(hintExt) : detected
 
-  let result: { bytes: Uint8Array, note?: string, detail?: Record<string, unknown> }
-  try {
-    result = await runFormat(format, input)
-  }
-  catch (err) {
-    return {
-      format,
-      inputSize,
-      outputSize: inputSize,
-      saved: 0,
-      savedPct: 0,
-      bytes: input,
-      passthrough: true,
-      note: `decode/encode failed: ${(err as Error).message}`,
-    }
-  }
+  const result = await runFormat(format, input)
 
   // Only keep the new bytes if they're actually smaller.
   const winning = result.bytes.length < inputSize ? result.bytes : input
@@ -151,10 +134,10 @@ async function runFormat(format: ImageFormat, input: Uint8Array): Promise<{ byte
     case 'svg': return optimizeSvg(input)
     case 'gif': return optimizeGif(input)
     case 'avif': return optimizeAvif(input)
-    case 'tiff': return { bytes: input, note: 'tiff passthrough (no ts-tiff lib yet)' }
-    case 'ico': return { bytes: input, note: 'ico passthrough (no ts-ico lib yet)' }
-    case 'heic': return { bytes: input, note: 'heic passthrough (no ts-heic decoder)' }
-    default: return { bytes: input, note: 'unknown format passthrough' }
+    case 'tiff': return { bytes: input, note: 'TIFF preserved without changes' }
+    case 'ico': return { bytes: input, note: 'Icon preserved without changes' }
+    case 'heic': return { bytes: input, note: 'HEIC preserved without changes' }
+    default: return { bytes: input, note: 'Unsupported format; original preserved' }
   }
 }
 
@@ -172,64 +155,50 @@ function formatFromExt(ext?: string): ImageFormat {
 }
 
 // ---------------------------------------------------------------------------
-// PNG — decode then re-deflate at level 9 with strategy sweep
+// PNG — recompress the original filtered stream without metadata loss
 // ---------------------------------------------------------------------------
 async function optimizePng(input: Uint8Array): Promise<{ bytes: Uint8Array, note?: string }> {
-  const decoded = png.sync.read(Buffer.from(input))
-  let smallest: Buffer | null = null
-  // Sweep deflate strategies at level 9 and keep the smallest. We don't
-  // sweep PNG filter types because ts-png's PNGSync.write doesn't expose a
-  // `filterType` knob — it picks adaptively. The earlier 4×6 sweep was 4×
-  // slower with identical output.
-  for (const deflateStrategy of [0, 1, 2, 3]) {
-    try {
-      const out = png.sync.write(
-        { width: decoded.width, height: decoded.height, data: decoded.data, gamma: decoded.gamma ?? 0 },
-        { deflateLevel: 9, deflateStrategy } as Parameters<typeof png.sync.write>[1],
-      )
-      if (!smallest || out.length < smallest.length) smallest = out
-    }
-    catch {
-      // Some strategy combos may not be supported — skip and continue.
-    }
-  }
-  if (!smallest) return { bytes: input, note: 'png re-encode produced no candidates' }
-  return { bytes: new Uint8Array(smallest.buffer, smallest.byteOffset, smallest.byteLength), note: 'png re-deflate (level 9, 4 strategies)' }
+  return { bytes: optimizePngBytes(input), note: 'Lossless PNG compression; metadata and animation preserved' }
 }
 
-// ---------------------------------------------------------------------------
-// JPEG — decode then re-encode at quality 85 (matches ImageOptim default)
-// ---------------------------------------------------------------------------
 async function optimizeJpeg(input: Uint8Array): Promise<{ bytes: Uint8Array, note?: string }> {
-  const decoded = jpeg.decode(input, { useTArray: true, formatAsRGBA: true }) as { width: number, height: number, data: Uint8Array | Buffer }
-  const data = decoded.data instanceof Uint8Array ? decoded.data : new Uint8Array((decoded.data as Buffer).buffer)
-  const encoded = jpeg.encode({ width: decoded.width, height: decoded.height, data }, 85)
-  const buf = encoded.data
-  const u8 = buf instanceof Uint8Array ? buf : new Uint8Array((buf as { buffer: ArrayBufferLike }).buffer)
-  return { bytes: u8, note: 'jpeg q=85 re-encode (note: drops EXIF / orientation)' }
+  return { bytes: jpeg.optimize(input), note: 'Lossless JPEG; orientation and color profiles preserved' }
 }
 
-// ---------------------------------------------------------------------------
-// WebP — decode then re-encode lossless (matches ImageOptim's WebP behaviour)
-// ---------------------------------------------------------------------------
 async function optimizeWebp(input: Uint8Array): Promise<{ bytes: Uint8Array, note?: string }> {
+  // Animated frames and image metadata must survive unchanged.
+  for (let offset = 12; offset + 8 <= input.length;) {
+    const type = new TextDecoder().decode(input.subarray(offset, offset + 4))
+    if (['ANIM', 'ANMF', 'ICCP', 'EXIF', 'XMP '].includes(type))
+      return { bytes: input, note: 'WebP animation and metadata preserved' }
+    const size = new DataView(input.buffer, input.byteOffset + offset + 4, 4).getUint32(0, true)
+    offset += 8 + size + (size % 2)
+    if (offset > input.length) throw new Error('Truncated WebP chunk')
+  }
+  const info = webp.getWebpInfo(webp.parseRiff(input))
+  if (info.width * info.height > 32 * 1024 * 1024) throw new Error('WebP exceeds 32 megapixels')
   const decoded = webp.decode(input)
-  const out = webp.encode(decoded, { lossless: true })
-  return { bytes: out, note: 'webp lossless re-encode' }
+  const out = webp.encode(decoded, { lossless: true, backend: 'pure-ts' })
+  return { bytes: out, note: 'Lossless WebP compression' }
 }
 
 // ---------------------------------------------------------------------------
 // BMP — decode then re-encode (BMP is mostly uncompressed; rarely a win)
 // ---------------------------------------------------------------------------
 async function optimizeBmp(input: Uint8Array): Promise<{ bytes: Uint8Array, note?: string }> {
+  if (input.length < 54) throw new Error('Truncated BMP header')
+  const header = new DataView(input.buffer, input.byteOffset, input.byteLength)
+  if (header.getUint32(14, true) >= 108) return { bytes: input, note: 'BMP color profile preserved' }
+  const pixels = Math.abs(header.getInt32(18, true)) * Math.abs(header.getInt32(22, true))
+  if (pixels > 32 * 1024 * 1024) throw new Error('BMP exceeds 32 megapixels')
   const decoded = bmp.decode(input)
   // Drop alpha if the image is fully opaque — saves ~25 % on RGBA bitmaps.
   const fullyOpaque = isFullyOpaque(decoded.data)
   const out = bmp.encode(decoded, { bitsPerPixel: fullyOpaque ? 24 : 32 })
-  return { bytes: out, note: fullyOpaque ? 'bmp re-encode (drop alpha)' : 'bmp re-encode' }
+  return { bytes: out, note: 'Lossless BMP compression' }
 }
 
-function isFullyOpaque(rgba: Uint8Array): boolean {
+function isFullyOpaque(rgba: Uint8Array | Uint8ClampedArray): boolean {
   for (let i = 3; i < rgba.length; i += 4) {
     if (rgba[i] !== 0xFF) return false
   }
@@ -240,77 +209,23 @@ function isFullyOpaque(rgba: Uint8Array): boolean {
 // GIF — palette tightening + global-palette consolidation (lossless)
 // ---------------------------------------------------------------------------
 async function optimizeGif(input: Uint8Array): Promise<{ bytes: Uint8Array, note?: string }> {
-  const out = gif.optimize(input)
-  return { bytes: out, note: 'gif palette tighten + global consolidate' }
+  const out = gif.reencode(input)
+  return { bytes: out, note: 'Lossless GIF compression; animation preserved' }
 }
 
 // ---------------------------------------------------------------------------
-// AVIF — lossless ISOBMFF re-mux (strip Exif/XMP/thumbnails/extra brands)
+// AVIF — lossless container compression with metadata retained
 // ---------------------------------------------------------------------------
-async function optimizeAvif(input: Uint8Array): Promise<{ bytes: Uint8Array, note?: string, detail?: Record<string, unknown> }> {
-  const result = avif.optimizeWithStats(input)
-  const droppedTypes = result.stats.droppedItemTypes
-  const note = droppedTypes.length > 0
-    ? `avif strip ${droppedTypes.join(', ')}`
-    : 'avif container re-mux'
-  return {
-    bytes: result.bytes,
-    note,
-    detail: {
-      keptItemIds: result.stats.keptItemIds,
-      droppedItemIds: result.stats.droppedItemIds,
-      droppedItemTypes: droppedTypes,
-    },
-  }
+async function optimizeAvif(input: Uint8Array): Promise<{ bytes: Uint8Array, note?: string }> {
+  const bytes = avif.remux(input, { preserveMetadata: true })
+  return { bytes, note: 'Lossless AVIF container compression; metadata and animation preserved' }
 }
 
 // ---------------------------------------------------------------------------
-// SVG — pure-text minifier. Conservative: comments, whitespace, XML
-// declaration, doctype. Leaves attribute values + CDATA contents alone.
+// SVG — parse and remove comments without changing text spacing.
 // ---------------------------------------------------------------------------
 async function optimizeSvg(input: Uint8Array): Promise<{ bytes: Uint8Array, note?: string }> {
-  let text = new TextDecoder().decode(input)
-  // Strip BOM
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
-
-  // Walk the document and skip the body of every <![CDATA[ ... ]]> block,
-  // so we don't strip HTML-style comments inside embedded <style> or
-  // <script> CDATA sections (which corrupt CSS / JS).
-  text = mapOutsideCdata(text, (chunk) => {
-    let s = chunk
-    s = s.replace(/<!--[\s\S]*?-->/g, '')
-    s = s.replace(/<\?xml[\s\S]*?\?>/g, '')
-    s = s.replace(/<!DOCTYPE[\s\S]*?>/gi, '')
-    s = s.replace(/>\s+</g, '><')
-    s = s.replace(/\s{2,}/g, ' ')
-    return s
-  })
-
-  return { bytes: new TextEncoder().encode(text.trim()), note: 'svg text minify' }
-}
-
-/** Run `transform` over every part of `input` that is OUTSIDE a CDATA section. */
-function mapOutsideCdata(input: string, transform: (chunk: string) => string): string {
-  const open = '<![CDATA['
-  const close = ']]>'
-  let result = ''
-  let i = 0
-  while (i < input.length) {
-    const cdataStart = input.indexOf(open, i)
-    if (cdataStart === -1) {
-      result += transform(input.slice(i))
-      break
-    }
-    result += transform(input.slice(i, cdataStart))
-    const cdataEnd = input.indexOf(close, cdataStart + open.length)
-    if (cdataEnd === -1) {
-      // Unterminated CDATA — preserve the rest verbatim.
-      result += input.slice(cdataStart)
-      break
-    }
-    // Preserve the CDATA section (including delimiters) byte-for-byte.
-    result += input.slice(cdataStart, cdataEnd + close.length)
-    i = cdataEnd + close.length
-  }
-  return result
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(input)
+  const result = optimizeSvgText(text, { plugins: ['removeComments'] })
+  return { bytes: new TextEncoder().encode(result.data), note: 'SVG comments removed; text spacing preserved' }
 }
