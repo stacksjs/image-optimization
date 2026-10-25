@@ -63,7 +63,11 @@ jobs:
       - name: Verify distributable
         run: |
           codesign --verify --deep --strict --verbose=2 dist/direct/ImageOptimization.app
+          codesign --verify --strict --verbose=2 dist/direct/*.dmg
           xcrun stapler validate dist/direct/*.dmg
+          spctl --assess --type execute --verbose=2 dist/direct/ImageOptimization.app
+          spctl --assess --type open --context context:primary-signature --verbose=2 dist/direct/*.dmg
+          test "$(du -sk dist/direct/ImageOptimization.app | cut -f1)" -lt 100000
           (cd dist/direct && shasum -a 256 *.dmg) > dist/direct/SHA256SUMS.txt
       - name: Publish verified installer
         env:
@@ -94,11 +98,14 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" "$RUNNER_TEMP/imageoptimization.keychain-db" "$HOME/Library/Keychains/login.keychain-db"
           printf '%s' "$APPLICATION_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/store-app.p12"
           printf '%s' "$INSTALLER_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/store-installer.p12"
           security import "$RUNNER_TEMP/store-app.p12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security import "$RUNNER_TEMP/store-installer.p12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/productbuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security find-identity -v -p codesigning "$KEYCHAIN" | grep 19E6B67993578B0F8B305446F14A182588C094D1
+          security find-identity -v -p basic "$KEYCHAIN" | grep CCFDD78721D27D99E7CC0C2FC780610367046C37
           printf '%s' "$PROFILE" | base64 --decode > "$RUNNER_TEMP/store.provisionprofile"
           chmod 600 "$RUNNER_TEMP/store.provisionprofile"
           echo "APPLE_SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
@@ -116,6 +123,7 @@ jobs:
         run: |
           bun run package
           codesign --verify --deep --strict dist/app-store/ImageOptimization.app
+          test "$(du -sk dist/app-store/ImageOptimization.app | cut -f1)" -lt 100000
           pkgutil --check-signature dist/app-store/*.pkg
           xcrun altool --validate-app --type osx --file dist/app-store/*.pkg --apiKey "$APP_STORE_CONNECT_API_KEY_ID" --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
       - name: Upload and submit the App Store version
