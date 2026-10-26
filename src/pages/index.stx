@@ -138,7 +138,6 @@
       }
       catch (err) {
         update(item.id, { status: 'error', note: err.message })
-        error.set(`${item.name}: ${err.message}`)
       }
     }
     async function choose() {
