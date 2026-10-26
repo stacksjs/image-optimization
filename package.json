@@ -1,7 +1,7 @@
 {
   "name": "image-optimization",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Private, lossless image optimization for macOS, built with Stacks, STX and Craft.",
   "author": "Chris Breuer <chris@stacksjs.com>",
   "license": "MIT",
@@ -41,14 +41,14 @@
     "@stacksjs/ts-png": "^0.1.10",
     "@stacksjs/ts-svg": "^0.1.6",
     "@stacksjs/ts-webp": "^0.1.7",
-    "craft-native": "^0.0.350",
+    "craft-native": "^0.0.351",
     "ts-gif": "^0.1.5",
     "ts-jpeg": "^0.3.6"
   },
   "devDependencies": {
     "@stacksjs/buddy": "^0.75.315",
     "better-dx": "^0.2.38",
-    "ts-pantry": "^0.11.130"
+    "ts-pantry": "^0.11.132"
   },
   "stacks": {
     "type": "native"
