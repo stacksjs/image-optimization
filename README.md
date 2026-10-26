@@ -58,11 +58,11 @@ The codecs live in their own repositories: [ts-png](https://github.com/stacksjs/
 
 STX compiles the interface and TypeScript backend into the app. Craft is the main macOS application process and supplies WKWebView, native file and folder panels, and file drops. It starts the bundled `stx-backend` helper and holds a lifetime pipe; the helper exits when Craft closes, including AppKit termination. The backend listens on an ephemeral loopback port, with a single-use launch session, HttpOnly SameSite cookie, and Host/Origin checks. Foreign pages cannot call the filesystem API.
 
-New copies are written completely and synced before an atomic, non-replacing link makes them visible. Symlinks and directories are rejected. The backend stops when the native window closes. The UI holds only one batch queue and releases upload buffers after processing.
+New copies are written completely and synced before an atomic, non-replacing link makes them visible. Symlinks and directories are rejected. The backend stops when the native window closes. The UI queues one image at a time and passes native paths; image buffers stay in the local backend.
 
 ## Releases
 
-A `v*` tag or a manual **Release macOS** workflow runs tests, builds the native app, tests the compiled executable from an unrelated directory, imports the signing identity into a temporary keychain, signs with the hardened runtime, notarizes with Apple's API, staples the DMG, verifies it, and publishes the installer with SHA-256 checksums. Signing or notarization failure stops publication.
+A `v*` tag or a manual **Release macOS** workflow runs tests, builds the native app, tests the compiled executable from an unrelated directory, and imports the signing identity into a temporary keychain. Craft signs the app with the hardened runtime, notarizes and staples it, then signs, notarizes and staples the DMG. The workflow verifies both signatures, Gatekeeper assessments and the bundle size before publishing the installer with SHA-256 checksums. Verification failure stops publication.
 
 From a clean `main` checkout, `bun run release:patch` bumps the version, commits it, and pushes the release tag to start that pipeline. Minor and major releases have matching commands.
 
